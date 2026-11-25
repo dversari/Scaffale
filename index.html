@@ -108,6 +108,7 @@ h1,h2,h3{font-family:var(--fh);font-weight:600;letter-spacing:-.015em;line-heigh
 <div id="toast"></div>
 <input id="importFile" type="file" accept="application/json,.json" hidden>
 <input id="shotFile" type="file" accept="image/*" hidden>
+<input id="isbnFile" type="file" accept="image/*" hidden>
 <script src="https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js"></script>
 <script>
 const $ = s => document.querySelector(s);
@@ -150,7 +151,7 @@ function norm(raw) {
   if (d.length === 10) { const b = '978' + d.slice(0, 9); let s = 0; for (let i = 0; i < 12; i++) s += +b[i] * (i % 2 ? 3 : 1); return b + ((10 - s % 10) % 10); }
   return d.length === 13 ? d : null;
 }
-const isIsbn = d => !!d && /^97[89]/.test(d);
+const isIsbn = d => !!d && /^97[89]\d{10}$/.test(d) && [...d].reduce((n, c, i) => n + +c * (i % 2 ? 3 : 1), 0) % 10 === 0;
 
 async function lookup(isbn) {
   try {
@@ -387,10 +388,12 @@ function vScanner() {
       <input name="isbn" class="in" inputmode="numeric" placeholder="Oppure digita l'ISBN" style="background:rgba(29,31,32,.55);color:var(--bg);border-color:rgba(242,240,235,.35)">
       <button class="btn" style="color:var(--bg);border-color:rgba(242,240,235,.35);background:rgba(29,31,32,.55)">Cerca</button>
     </form>
+    <button class="dbtn" data-a="isbnPhoto">${ic('cam', 18)}Senza codice a barre? Fotografa l'ISBN stampato</button>
     ${link ? `<button class="dbtn" data-a="linkSkip">Salta questo libro${left > 1 ? ' · ne restano ' + left : ''}</button>` : `<button class="dbtn" data-a="manual">${ic('pen', 18)}Libro senza codice? Inserisci a mano</button>`}
   </div>` : `<div class="tray" style="position:relative;padding:14px 20px calc(var(--sab) + 14px);display:flex;flex-direction:column;gap:10px">
     <div style="display:flex;justify-content:space-between;align-items:baseline"><span class="k">Letti in questa serie</span><span style="font-family:var(--fh);font-weight:600;font-size:20px">${U.queue.length === 1 ? '1 libro' : U.queue.length + ' libri'}</span></div>
     <div style="min-height:96px">${U.queue.length ? [...U.queue].reverse().slice(0, 3).map(x => `<div style="display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px solid var(--div);font-size:14px"><span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(x.t)}</span><span class="muted" style="flex:none;font-size:12px">${x.dup ? 'già presente' : x.status === 'loading' ? '…' : x.status === 'missing' ? 'da completare' : esc((x.a || '').split(',')[0].split(' ').slice(-1)[0])}</span></div>`).join('') : '<div class="muted" style="font-size:13px;padding:8px 0">Ogni codice letto finisce qui. Alla fine scegli la posizione per tutti.</div>'}</div>
+    <button class="btn g" data-a="isbnPhoto" style="justify-self:start">${ic('cam', 18)}Fotografa l'ISBN stampato</button>
     <button class="btn p bp" data-a="batchReview" ${U.queue.length ? '' : 'disabled'}>${M}Fine · rivedi e archivia</button>
   </div>`}
   </div>`;
@@ -503,10 +506,13 @@ const needScan = y => !y.id && (!y.info ? y.status !== 'looking' : U.linkAll && 
 async function findByTitle(t, a, p) {
   try {
     const sur = a ? a.split(',')[0].trim().split(' ').slice(-1)[0] : '';
-    const q = `intitle:"${t.replace(/"/g, '')}"` + (sur ? ` inauthor:${sur}` : '');
-    const j = await (await fetch('https://www.googleapis.com/books/v1/volumes?maxResults=10&printType=books&q=' + encodeURIComponent(q))).json();
-    const vs = (j.items || []).map(x => x.volumeInfo).filter(v => v && v.title);
+    const gb = async q => { const j = await (await fetch('https://www.googleapis.com/books/v1/volumes?maxResults=20&printType=books&q=' + encodeURIComponent(q))).json(); return (j.items || []).map(x => x.volumeInfo).filter(v => v && v.title); };
+    const tt = t.replace(/"/g, '');
+    let vs = await gb(`intitle:"${tt}"` + (sur ? ` inauthor:${sur}` : ''));
+    if (!vs.length) vs = await gb(`${tt} ${sur}`.trim());
+    if (!vs.length && sur) vs = await gb(`intitle:${tt}`);
     if (!vs.length) return null;
+    vs.sort((x, y) => (y.ratingsCount || 0) - (x.ratingsCount || 0));
     const pn = (p || '').toLowerCase().replace(/editore|edizioni|editrice/g, '').trim().split(/\s+/)[0] || '';
     const isbnOf = v => { const ids = v.industryIdentifiers || []; const id = ids.find(x => x.type === 'ISBN_13') || ids.find(x => x.type === 'ISBN_10'); return id ? (norm(id.identifier) || '') : ''; };
     const v = (pn && vs.find(x => (x.publisher || '').toLowerCase().includes(pn) && isbnOf(x))) || vs.find(x => x.language === 'it' && isbnOf(x)) || vs.find(isbnOf) || vs[0];
@@ -532,13 +538,13 @@ function vShot() {
   } else if (s.phase === 'review') {
     const inc = s.items.filter(x => x.include).length, todo = s.items.filter(x => !x.id && !x.info && x.status !== 'looking').length, verify = s.items.filter(x => !x.id && x.info && x.info.src === 'titolo' && x.include).length;
     body = `${pic}<div><div class="k">${s.items.length === 1 ? '1 dorso letto' : s.items.length + ' dorsi letti'}</div><h2 style="font-size:30px;margin-top:2px">Controlla prima di salvare</h2></div>${locBtn('Ripiano fotografato', U.loc)}
-    ${todo ? `<div class="hint">${ic('scan', 18)}<span>${todo === 1 ? '1 libro non trovato' : todo + ' libri non trovati'} né in archivio né online: scansiona il codice per registrarli. Quelli non scansionati non vengono salvati.</span></div>` : ''}${verify ? `<div class="hint">${ic('check', 18)}<span>${verify === 1 ? '1 libro nuovo riconosciuto' : verify + ' libri nuovi riconosciuti'} dal dorso: verranno aggiunti con l'edizione più probabile. Per quella esatta usa «Verifica edizione col codice».</span></div>` : ''}
+    ${todo ? `<div class="hint">${ic('scan', 18)}<span>${todo === 1 ? '1 libro non trovato' : todo + ' libri non trovati'} online: si salvano con titolo e autore letti sul dorso. Per i dati completi scansiona il codice o fotografa l'ISBN.</span></div>` : ''}${verify ? `<div class="hint">${ic('check', 18)}<span>${verify === 1 ? '1 libro nuovo riconosciuto' : verify + ' libri nuovi riconosciuti'} dal dorso: verranno aggiunti con l'edizione più probabile. Per quella esatta usa «Verifica edizione col codice».</span></div>` : ''}
     ${s.items.length ? `<div style="border-top:1px solid var(--div)">${s.items.map((x, i) => {
       const b = x.id && S.books.find(y => y.id === x.id), d = b || x.info || x;
-      const note = b ? (b.room === U.loc.room && b.shelf === U.loc.shelf && +b.level === +U.loc.level ? 'già qui' : 'in archivio · ora in ' + short(b)) : x.info ? (x.info.src === 'titolo' ? 'nuovo · dal dorso' + (x.info.p ? ' · ' + x.info.p : '') + (x.info.y ? ' ' + x.info.y : '') : 'nuovo · edizione dal codice' + (x.info.isbn ? ' ' + x.info.isbn : '')) : x.status === 'looking' ? 'cerco online…' : 'non trovato · tocca per scansionare';
-      return `<button class="row" data-a="shotToggle" data-v="${i}" style="grid-template-columns:24px minmax(0,1fr) auto">${!x.id && !x.info ? `<span style="color:var(--a7)">${ic('scan', 22)}</span>` : `<span class="check ${x.include ? 'on' : ''}">${x.include ? ic('check', 14) : ''}</span>`}<div style="min-width:0"><div class="t1">${esc(d.t)}</div><div class="t2">${esc(d.a || '—')} · ${esc(note)}</div></div>${x.conf === 'bassa' ? '<span class="tag n">Incerto</span>' : ''}</button>`;
+      const note = b ? (b.room === U.loc.room && b.shelf === U.loc.shelf && +b.level === +U.loc.level ? 'già qui' : 'in archivio · ora in ' + short(b)) : x.info ? (x.info.src === 'titolo' ? 'nuovo · dal dorso' + (x.info.p ? ' · ' + x.info.p : '') + (x.info.y ? ' ' + x.info.y : '') : 'nuovo · edizione dal codice' + (x.info.isbn ? ' ' + x.info.isbn : '')) : x.status === 'looking' ? 'cerco online…' : 'non trovato online · si salva col titolo letto';
+      return `<button class="row" data-a="shotToggle" data-v="${i}" style="grid-template-columns:24px minmax(0,1fr) auto"><span class="check ${x.include ? 'on' : ''}">${x.include ? ic('check', 14) : ''}</span><div style="min-width:0"><div class="t1">${esc(d.t)}</div><div class="t2">${esc(d.a || '—')} · ${esc(note)}</div></div>${x.conf === 'bassa' ? '<span class="tag n">Incerto</span>' : ''}</button>`;
     }).join('')}</div>` : '<div class="hint">Nessun dorso riconosciuto. Prova più vicino, con più luce e il telefono dritto.</div>'}`;
-    bar = `${todo ? `<button class="btn p bp" data-a="linkStart">${M}${ic('scan')}Scansiona ${todo === 1 ? '1 codice mancante' : todo + ' codici mancanti'}</button>` : ''}<button class="btn ${todo ? '' : 'p bp'}" data-a="saveShot" ${inc ? '' : 'disabled'}>${todo ? '' : M}${inc === 1 ? 'Salva 1 libro' : 'Salva ' + inc + ' libri'} → ${esc(short(U.loc))}</button>${verify ? `<button class="btn" data-a="linkVerify">${ic('scan', 18)}Verifica edizione col codice (${verify})</button>` : ''}<button class="btn g" data-a="shotPick">${ic('cam', 18)}Rifai foto</button>`;
+    bar = `<button class="btn p bp" data-a="saveShot" ${inc ? '' : 'disabled'}>${M}${inc === 1 ? 'Salva 1 libro' : 'Salva ' + inc + ' libri'} → ${esc(short(U.loc))}</button>${todo ? `<button class="btn" data-a="linkStart">${ic('scan', 18)}Scansiona ${todo === 1 ? '1 codice mancante' : todo + ' codici mancanti'}</button>` : ''}${verify ? `<button class="btn" data-a="linkVerify">${ic('scan', 18)}Verifica edizione col codice (${verify})</button>` : ''}<button class="btn g" data-a="shotPick">${ic('cam', 18)}Rifai foto</button>`;
   } else {
     body = `<div><h2 style="font-size:32px">Fotografa un ripiano</h2><p class="muted" style="margin:4px 0 0;font-size:14px">Un ripiano per foto, inquadrato dritto, con i dorsi leggibili. Dopo la lettura controlli l'elenco: i libri confermati vengono messi qui, nell'ordine della foto.</p></div>${locBtn('Ripiano fotografato', U.loc)}${s.err ? `<div class="hint">${esc(s.err)}</div>` : ''}`;
     bar = `<button class="btn p bp" data-a="shotPick">${M}${ic('cam')}Scatta o scegli foto</button>`;
@@ -591,7 +597,8 @@ const A = {
   menu: () => { U.sheet = 'menu'; renderSheet(); },
   shot: () => { U.shot = { phase: 'ready' }; U.loc = { ...S.lastLoc }; go('shot'); },
   shotPick: () => $('#shotFile').click(),
-  shotToggle: v => { const x = U.shot.items[+v]; if (!x.id && !x.info) return A.linkStart(v); x.include = !x.include; render(); },
+  isbnPhoto: () => { if (!getKey()) { flash('Serve la chiave API Claude', 'Impostala da «Foto» nella schermata principale'); return; } $('#isbnFile').click(); },
+  shotToggle: v => { const x = U.shot.items[+v]; x.include = !x.include; render(); },
   linkVerify: () => { U.linkAll = true; const i = U.shot.items.findIndex(needScan); if (i < 0) return; U.linkIdx = i; U.mode = 'link'; U.flash = null; lastCode = ''; go('scanner'); },
   linkStart: v => { U.linkAll = false; const i = v !== undefined && v !== '' ? +v : U.shot.items.findIndex(needScan); if (i < 0) return; U.linkIdx = i; U.mode = 'link'; U.flash = null; lastCode = ''; go('scanner'); },
   linkSkip: () => nextLink(),
@@ -602,7 +609,7 @@ const A = {
       if (!x.include) return;
       const b = x.id && S.books.find(y => y.id === x.id);
       if (b) { Object.assign(b, { room: L.room, shelf: L.shelf, level: L.level, pos: i }); moved++; }
-      else if (x.info) { const [nb] = addBooks([x.info], L); nb.pos = i; added++; }
+      else { const [nb] = addBooks([x.info || { t: x.t, a: x.a, p: x.p || '' }], L); nb.pos = i; added++; }
     });
     S.lastLoc = L; save(); enrich(); U.shot = null; go('archive');
     toast(`${moved + added} in ${short(L)}${added ? ` · ${added} nuovi` : ''}`);
@@ -687,6 +694,28 @@ $('#importFile').addEventListener('change', async e => {
     U.sheet = null; renderSheet(); render(); enrich(); toast(`${j.books.length} libri ripristinati`);
   } catch (err) { alert('File di backup non valido.'); }
 });
+async function readIsbn(img) {
+  const r = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers: { 'content-type': 'application/json', 'x-api-key': getKey(), 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' }, body: JSON.stringify({ model: 'claude-sonnet-5-5', max_tokens: 200, messages: [{ role: 'user', content: [
+    { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: img.split(',')[1] } },
+    { type: 'text', text: "Nella foto c'è un libro o una sua pagina con un codice ISBN stampato (retro, risvolto o pagina del copyright). Rispondi solo con l'ISBN, cifre e trattini come stampati, senza altro testo. Se ce ne sono più di uno, scegli quello dell'edizione cartacea in brossura o rilegata. Se non c'è nessun ISBN leggibile, rispondi NESSUNO." }] }] }) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(r.status === 401 ? 'chiave API non valida' : (j.error && j.error.message) || 'errore ' + r.status);
+  const txt = (j.content || []).filter(c => c.type === 'text').map(c => c.text).join(' ').toUpperCase();
+  for (const c of txt.match(/[0-9][0-9\- ]{8,18}[0-9X]/g) || []) { const d = norm(c); if (isIsbn(d)) return d; }
+  return null;
+}
+$('#isbnFile').addEventListener('change', async e => {
+  const file = e.target.files[0]; e.target.value = '';
+  if (!file) return;
+  flash('Leggo l\'ISBN…', 'Qualche secondo');
+  try {
+    const d = await readIsbn(await shrink(file));
+    if (!d) { flash('ISBN non trovato', 'Fotografa da vicino la scritta «ISBN»'); return; }
+    lastCode = ''; await onCode(d);
+    if (U.screen === 'scanner' && U.mode !== 'single' && !reader) camStart();
+  } catch (err) { flash('Lettura non riuscita', String(err.message || err)); }
+});
+window.addEventListener('focus', () => { if (U.screen === 'scanner' && !reader) camStart(); });
 $('#shotFile').addEventListener('change', async e => {
   const file = e.target.files[0]; e.target.value = '';
   if (!file) return;
@@ -708,6 +737,7 @@ $('#shotFile').addEventListener('change', async e => {
       const ex = info && info.isbn && S.books.find(b => b.isbn === info.isbn);
       if (ex && !items.some(y => y.id === ex.id)) Object.assign(x, { id: ex.id, include: true });
       else if (info && !ex) Object.assign(x, { info, include: x.conf !== 'bassa' });
+      else if (!info) x.include = x.conf !== 'bassa';
       x.status = 'done';
       if (U.screen === 'shot' && U.shot && U.shot.items === items) render();
     });
