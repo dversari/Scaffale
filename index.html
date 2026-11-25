@@ -344,7 +344,7 @@ function woodSvg(room, o) {
       const k = v.h / 30, dims = list.map(b => { const d = b.dim || {}; return { b, t: cm(d.thickness) || ((+b.pg || 220) * 0.0065 + 0.25), h: cm(d.height) || (19 + hashT(b.t + b.a) % 5) }; });
       const tot = dims.reduce((a, d) => a + d.t * k, 0), sc = Math.min(1, (v.w - 4) / tot);
       let x = v.x + 2;
-      return dims.map(d => { const w = Math.max(1.5, d.t * k * sc), h = Math.min(v.h - 2, d.h * k), sl = spineLook(d.b), r = `<rect data-a="open" data-v="${d.b.id}" x="${x.toFixed(1)}" y="${(v.y + v.h - h).toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}" fill="${sl.bg}" stroke="rgba(0,0,0,.3)" stroke-width=".6"><title>${esc(d.b.t)}</title></rect>`; x += w; return r; }).join('');
+      return dims.map(d => { const w = Math.max(1.5, d.t * k * sc), h = Math.min(v.h - 2, d.h * k), sl = spineLook(d.b), r = `<rect x="${x.toFixed(1)}" y="${(v.y + v.h - h).toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}" fill="${sl.bg}" stroke="rgba(0,0,0,.3)" stroke-width=".6"><title>${esc(d.b.t)}</title></rect>`; x += w; return r; }).join('');
     }
     return '';
   };
@@ -356,7 +356,7 @@ function woodSvg(room, o) {
   const [cx, cy, cw, ch] = m.cab, [tx, ty, tw, th] = m.tv;
   const cab = `<rect x="${cx}" y="${cy}" width="${cw}" height="${ch}" fill="#e7e4dd" stroke="#5d5d60" stroke-width="6"/>` + [1, 2, 3].map(i => `<line x1="${cx + i * cw / 4}" y1="${cy}" x2="${cx + i * cw / 4}" y2="${cy + ch}" stroke="#5d5d60" stroke-width="3"/>`).join('');
   const pick = o.pick ? m.vani.map(v => { const on = vanoOf(o.pick) === v; return `<g data-a="pickVano" data-v="${v.n}"><rect x="${v.x - (v.o ? 0 : 4)}" y="${v.y - (v.o ? 0 : 4)}" width="${v.w + (v.o ? 0 : 8)}" height="${v.h + (v.o ? 0 : 8)}" fill="${on ? 'rgba(103,131,108,.55)' : 'rgba(255,255,255,.01)'}" stroke="${on ? '#253127' : 'transparent'}" stroke-width="${on ? 6 : 2}"/><text x="${v.x + v.w / 2}" y="${v.y + v.h / 2}" text-anchor="middle" dominant-baseline="central" style="font:600 ${Math.min(34, v.h * 0.5, v.w * 0.55).toFixed(0)}px 'Barlow Condensed',sans-serif;fill:#253127;paint-order:stroke;stroke:#f2f0eb;stroke-width:6px;pointer-events:none">${v.n}</text></g>`; }).join('') : '';
-  return `<svg viewBox="${vx} ${vy} ${vw} ${vh}" role="img" aria-label="${esc(m.name)} ${esc(room)}">${defs}${m.vani.filter(v => v.o).map(box).join('')}${m.vani.filter(v => !v.o).map(box).join('')}${cab}<rect x="${tx}" y="${ty}" width="${tw}" height="${th}" rx="3" fill="#1d1f20"/>${pick}</svg>`;
+  return `<svg viewBox="${vx} ${vy} ${vw} ${vh}" role="img" aria-label="${esc(m.name)} ${esc(room)}">${defs}${m.vani.filter(v => v.o).map(box).join('')}${m.vani.filter(v => !v.o).map(box).join('')}${cab}<rect x="${tx}" y="${ty}" width="${tw}" height="${th}" rx="3" fill="#1d1f20"/>${pick}${o.books ? m.vani.map(v => `<rect data-a="openVano" data-v="${esc(room)}|${v.n}" x="${v.x - 7}" y="${v.y - 7}" width="${v.w + 14}" height="${v.h + 14}" fill="transparent"><title>Vano ${v.n}</title></rect>`).join('') : ''}</svg>`;
 }
 
 /* ——— views ——— */
@@ -596,6 +596,16 @@ function render() {
 function renderSheet() {
   const el = $('#sheet');
   if (!U.sheet) { el.innerHTML = ''; return; }
+  if (U.sheet === 'vano') {
+    const [room, n] = U.vano, v = MAPS[room].vani.find(x => x.n === n);
+    const list = S.books.filter(b => b.room === room && vanoOf(b) === v).sort((p, q) => (p.pos ?? 1e9) - (q.pos ?? 1e9));
+    el.innerHTML = `<div class="bd" data-a="closeSheet"></div><div class="sh"><div style="display:flex;justify-content:space-between;align-items:center"><div><div class="k">${esc(room)} · ${esc(MAPS[room].name)}</div><h3 style="font-size:30px">Vano ${esc(n)}${v.o ? ' <span class="muted" style="font-size:18px">· aperto</span>' : ''}</h3></div><button class="btn g ic" data-a="closeSheet" aria-label="Chiudi" style="color:var(--text)">${ic('x')}</button></div>
+    ${list.length ? `<div class="shelf">${list.map(b => { const sl = spineLook(b); return `<button class="spine" data-a="open" data-v="${b.id}" title="${esc(b.t)}" style="height:${sl.hp}px;width:${Math.max(28, sl.w)}px;background:${sl.bg};color:${sl.ink};font-size:${sl.fs}px">${esc(b.t)}</button>`; }).join('')}</div>
+    <div style="border-top:1px solid var(--div)">${list.map(b => `<button class="row" data-a="open" data-v="${b.id}" style="grid-template-columns:minmax(0,1fr) auto;padding:10px 0"><div style="min-width:0"><div class="t1">${esc(b.t)}</div><div class="t2">${esc(b.a)}</div></div><span style="color:var(--n4)">${ic('next', 16)}</span></button>`).join('')}</div>`
+    : `<p class="muted" style="margin:0;font-size:15px">Nessun libro in questo vano. Apri un libro e scegli la posizione, oppure usa «Foto» davanti al vano.</p>`}
+    <div class="muted" style="font-size:13px">${list.length === 1 ? '1 libro' : list.length + ' libri'}, nell'ordine dello scaffale</div></div>`;
+    return;
+  }
   if (U.sheet === 'gkey') {
     el.innerHTML = `<div class="bd" data-a="closeSheet"></div><div class="sh"><div style="display:flex;justify-content:space-between;align-items:center"><h3 style="font-size:26px">Chiave Google Books</h3><button class="btn g ic" data-a="closeSheet" aria-label="Chiudi" style="color:var(--text)">${ic('x')}</button></div>
     <p class="muted" style="margin:0;font-size:14px">Senza chiave Google limita molto le ricerche. Con una chiave gratuita hai 1000 ricerche al giorno. Resta solo su questo dispositivo.</p>
@@ -660,6 +670,7 @@ const A = {
     S.lastLoc = L; save(); enrich(); U.shot = null; go('archive');
     toast(`${moved + added} in ${short(L)}${added ? ` · ${added} nuovi` : ''}`);
   },
+  openVano: v => { const i = String(v).lastIndexOf('|'); U.vano = [v.slice(0, i), v.slice(i + 1)]; U.sheet = 'vano'; renderSheet(); },
   gkeySheet: () => { U.sheet = 'gkey'; renderSheet(); },
   delGKey: () => { try { localStorage.removeItem(GKEY); } catch (e) {} U.sheet = null; renderSheet(); toast('Chiave Google rimossa'); },
   delKey: () => { try { localStorage.removeItem(KKEY); } catch (e) {} U.sheet = null; renderSheet(); toast('Chiave API rimossa'); },
