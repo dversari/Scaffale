@@ -68,7 +68,7 @@ h1,h2,h3{font-family:var(--fh);font-weight:600;letter-spacing:-.015em;line-heigh
 .spine{all:unset;cursor:pointer;box-sizing:border-box;flex:none;border:1px solid var(--div);writing-mode:vertical-rl;transform:rotate(180deg);padding:8px 0;display:flex;align-items:center;justify-content:center;font-family:var(--fh);font-weight:600;font-size:13px;line-height:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .spine{box-shadow:inset 2px 0 0 rgba(255,255,255,.14),inset -2px 0 0 rgba(0,0,0,.14)}
 .spine.new{outline:2px solid var(--a);outline-offset:2px}
-.mapw svg{display:block;width:100%;height:auto;background:#d9d3ca}
+.mapw svg{display:block;width:100%;height:auto;background:#f2f0eb}
 .mapw [data-a]{cursor:pointer}
 .loc{all:unset;cursor:pointer;display:grid;grid-template-columns:24px minmax(0,1fr) 20px;gap:12px;align-items:center;padding:14px;border:1px solid var(--a);box-sizing:border-box}
 .loc:active{background:color-mix(in srgb,var(--a) 10%,transparent)}
@@ -298,9 +298,8 @@ function go(screen) {
 /* ——— disegno libreria in legno ——— */
 function woodSvg(room, o) {
   const m = MAPS[room], [vx, vy, vw, vh] = m.vb;
-  const plank = (x, y, w, h, v) => `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}" fill="#000" filter="url(#mw${v ? 'V' : 'H'})"/><rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}" fill="none" stroke="rgba(0,0,0,.35)"/>`;
-  const fx = f => `<filter id="mw${f}" x="0" y="0" width="1" height="1" color-interpolation-filters="sRGB"><feTurbulence type="fractalNoise" baseFrequency="${f === 'H' ? '0.004 0.5' : '0.5 0.004'}" numOctaves="3" seed="${f === 'H' ? 7 : 3}"/><feColorMatrix values="0.55 0 0 0 0.18  0.48 0 0 0 0.15  0.4 0 0 0 0.11  0 0 0 0 1"/><feComposite in2="SourceGraphic" operator="in"/></filter>`;
-  const defs = `<defs>${fx('H')}${fx('V')}<linearGradient id="msh" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000" stop-opacity=".38"/><stop offset="1" stop-color="#000" stop-opacity="0"/></linearGradient></defs>`;
+  const plank = (x, y, w, h) => `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}" fill="#5d5d60"/>`;
+  const defs = '';
   const content = v => {
     if (o.books) {
       const list = o.books.filter(b => b.room === room && vanoOf(b) === v).sort((p, q) => (p.pos ?? 1e9) - (q.pos ?? 1e9));
@@ -312,14 +311,15 @@ function woodSvg(room, o) {
     }
     return '';
   };
-  const box = v => { const t = 12;
-    if (v.o) return content(v);
-    return `<rect x="${v.x}" y="${v.y}" width="${v.w}" height="${v.h}" fill="#b9b1a6"/>${content(v)}<rect x="${v.x}" y="${v.y}" width="${v.w}" height="${Math.min(v.h, 22)}" fill="url(#msh)" pointer-events="none"/>`
+  const box = v => { const t = 7;
+    if (v.o) return `<rect x="${v.x + 2}" y="${v.y + 2}" width="${v.w - 4}" height="${v.h - 4}" fill="none" stroke="#b7b7ba" stroke-width="2" stroke-dasharray="8 6"/>${content(v)}${lab(v)}`;
+    return `<rect x="${v.x}" y="${v.y}" width="${v.w}" height="${v.h}" fill="#e7e4dd"/>${content(v)}${lab(v)}`
       + plank(v.x - t, v.y - t, v.w + 2 * t, t) + plank(v.x - t, v.y + v.h, v.w + 2 * t, t) + plank(v.x - t, v.y, t, v.h, 1) + plank(v.x + v.w, v.y, t, v.h, 1); };
+  const lab = v => o.pick ? '' : `<text x="${v.x + 6}" y="${v.y + 6}" dominant-baseline="hanging" style="font:600 ${Math.min(30, v.h * 0.42).toFixed(0)}px 'Barlow Condensed',sans-serif;fill:#253127;paint-order:stroke;stroke:#f2f0eb;stroke-width:5px;pointer-events:none">${v.n}</text>`;
   const [cx, cy, cw, ch] = m.cab, [tx, ty, tw, th] = m.tv;
-  const cab = plank(cx, cy, cw, ch) + [0, 1, 2, 3].map(i => `<rect x="${cx + 8 + i * cw / 4}" y="${cy + 10}" width="${cw / 4 - 16}" height="${ch - 20}" fill="none" stroke="rgba(0,0,0,.4)" stroke-width="1.5"/>`).join('');
-  const pick = o.pick ? m.vani.map(v => { const on = vanoOf(o.pick) === v; return `<g data-a="pickVano" data-v="${v.n}"><rect x="${v.x - (v.o ? 0 : 4)}" y="${v.y - (v.o ? 0 : 4)}" width="${v.w + (v.o ? 0 : 8)}" height="${v.h + (v.o ? 0 : 8)}" fill="${on ? 'rgba(103,131,108,.55)' : 'rgba(255,255,255,.01)'}" stroke="${on ? '#253127' : 'rgba(255,255,255,.55)'}" stroke-width="${on ? 6 : 2}"/><text x="${v.x + v.w / 2}" y="${v.y + v.h / 2}" text-anchor="middle" dominant-baseline="central" style="font:600 ${Math.min(34, v.h * 0.5, v.w * 0.55).toFixed(0)}px 'Barlow Condensed',sans-serif;fill:#fff;paint-order:stroke;stroke:#000;stroke-width:5px;pointer-events:none">${v.n}</text></g>`; }).join('') : '';
-  return `<svg viewBox="${vx} ${vy} ${vw} ${vh}" role="img" aria-label="${esc(m.name)} ${esc(room)}">${defs}<rect x="${vx}" y="${cy - 12}" width="${vw}" height="${vh}" fill="#cbc4ba"/>${m.vani.filter(v => v.o).map(box).join('')}${m.vani.filter(v => !v.o).map(box).join('')}${cab}<rect x="${tx}" y="${ty}" width="${tw}" height="${th}" rx="3" fill="#0d1218" stroke="#000" stroke-width="3"/>${pick}</svg>`;
+  const cab = `<rect x="${cx}" y="${cy}" width="${cw}" height="${ch}" fill="#e7e4dd" stroke="#5d5d60" stroke-width="6"/>` + [1, 2, 3].map(i => `<line x1="${cx + i * cw / 4}" y1="${cy}" x2="${cx + i * cw / 4}" y2="${cy + ch}" stroke="#5d5d60" stroke-width="3"/>`).join('');
+  const pick = o.pick ? m.vani.map(v => { const on = vanoOf(o.pick) === v; return `<g data-a="pickVano" data-v="${v.n}"><rect x="${v.x - (v.o ? 0 : 4)}" y="${v.y - (v.o ? 0 : 4)}" width="${v.w + (v.o ? 0 : 8)}" height="${v.h + (v.o ? 0 : 8)}" fill="${on ? 'rgba(103,131,108,.55)' : 'rgba(255,255,255,.01)'}" stroke="${on ? '#253127' : 'transparent'}" stroke-width="${on ? 6 : 2}"/><text x="${v.x + v.w / 2}" y="${v.y + v.h / 2}" text-anchor="middle" dominant-baseline="central" style="font:600 ${Math.min(34, v.h * 0.5, v.w * 0.55).toFixed(0)}px 'Barlow Condensed',sans-serif;fill:#253127;paint-order:stroke;stroke:#f2f0eb;stroke-width:6px;pointer-events:none">${v.n}</text></g>`; }).join('') : '';
+  return `<svg viewBox="${vx} ${vy} ${vw} ${vh}" role="img" aria-label="${esc(m.name)} ${esc(room)}">${defs}${m.vani.filter(v => v.o).map(box).join('')}${m.vani.filter(v => !v.o).map(box).join('')}${cab}<rect x="${tx}" y="${ty}" width="${tw}" height="${th}" rx="3" fill="#1d1f20"/>${pick}</svg>`;
 }
 
 /* ——— views ——— */
