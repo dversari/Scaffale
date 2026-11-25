@@ -153,17 +153,32 @@ function norm(raw) {
 }
 const isIsbn = d => !!d && /^97[89]\d{10}$/.test(d) && [...d].reduce((n, c, i) => n + +c * (i % 2 ? 3 : 1), 0) % 10 === 0;
 
+let gbPause = 0, lastLookupErr = '';
+const gbInfo = v => ({ t: v.title + (v.subtitle ? ': ' + v.subtitle : ''), a: (v.authors || []).join(', '), p: v.publisher || '', y: (v.publishedDate || '').slice(0, 4), pg: v.pageCount || '', cover: ((v.imageLinks && (v.imageLinks.thumbnail || v.imageLinks.smallThumbnail)) || '').replace('http:', 'https:'), dim: v.dimensions || null });
+async function gbFetch(q) {
+  if (Date.now() < gbPause) throw new Error('Google Books in pausa (troppe richieste)');
+  const r = await fetch('https://www.googleapis.com/books/v1/volumes?' + q);
+  if (r.status === 429 || r.status === 403) { gbPause = Date.now() + 5 * 60e3; throw new Error('Google Books: troppe richieste (' + r.status + ')'); }
+  if (!r.ok) throw new Error('Google Books: errore ' + r.status);
+  return r.json();
+}
 async function lookup(isbn) {
+  const errs = [];
+  for (const q of [`q=isbn:${isbn}`, `q=${isbn}`]) {
+    try { const j = await gbFetch(q); const v = (j.items || []).map(x => x.volumeInfo).find(v => v && v.title && (v.industryIdentifiers || []).some(i => (norm(i.identifier) || '') === isbn)) || (q.startsWith('q=isbn') && j.items && j.items[0] && j.items[0].volumeInfo); if (v) return gbInfo(v); }
+    catch (e) { errs.push(e.message); break; }
+  }
   try {
-    const j = await (await fetch(`https://www.googleapis.com/books/v1/volumes?q=isbn:${isbn}`)).json();
-    const v = j.items && j.items[0] && j.items[0].volumeInfo;
-    if (v) return { t: v.title + (v.subtitle ? ': ' + v.subtitle : ''), a: (v.authors || []).join(', '), p: v.publisher || '', y: (v.publishedDate || '').slice(0, 4), pg: v.pageCount || '', cover: ((v.imageLinks && (v.imageLinks.thumbnail || v.imageLinks.smallThumbnail)) || '').replace('http:', 'https:'), dim: v.dimensions || null };
-  } catch (e) {}
+    const r = await fetch(`https://openlibrary.org/api/books?bibkeys=ISBN:${isbn}&format=json&jscmd=data`);
+    const j = await r.json(); const v = j['ISBN:' + isbn];
+    if (v) return { t: v.title + (v.subtitle ? ': ' + v.subtitle : ''), a: (v.authors || []).map(x => x.name).join(', '), p: (v.publishers && v.publishers[0] && v.publishers[0].name) || '', y: ((v.publish_date || '').match(/\d{4}/) || [''])[0], pg: v.number_of_pages || '', cover: (v.cover && v.cover.medium) || '', dim: null };
+  } catch (e) { errs.push('Open Library non raggiungibile'); }
   try {
-    const j = await (await fetch(`https://openlibrary.org/api/books?bibkeys=ISBN:${isbn}&format=json&jscmd=data`)).json();
-    const v = j['ISBN:' + isbn];
-    if (v) return { t: v.title, a: (v.authors || []).map(x => x.name).join(', '), p: (v.publishers && v.publishers[0] && v.publishers[0].name) || '', y: ((v.publish_date || '').match(/\d{4}/) || [''])[0], pg: v.number_of_pages || '', cover: (v.cover && v.cover.medium) || '', dim: null };
+    const j = await (await fetch(`https://openlibrary.org/search.json?isbn=${isbn}&fields=title,subtitle,author_name,publisher,first_publish_year,number_of_pages_median,cover_i&limit=1`)).json();
+    const v = j.docs && j.docs[0];
+    if (v && v.title) return { t: v.title + (v.subtitle ? ': ' + v.subtitle : ''), a: (v.author_name || []).join(', '), p: (v.publisher || [])[0] || '', y: v.first_publish_year ? String(v.first_publish_year) : '', pg: v.number_of_pages_median || '', cover: v.cover_i ? `https://covers.openlibrary.org/b/id/${v.cover_i}-M.jpg` : '', dim: null };
   } catch (e) {}
+  lastLookupErr = errs.join(' · ');
   return null;
 }
 
@@ -296,13 +311,14 @@ async function enrich() {
       if (!b) break;
       if (b.isbn && b.dim === undefined) {
         b.dim = null;
-        try { const j = await (await fetch(`https://www.googleapis.com/books/v1/volumes?q=isbn:${b.isbn}`)).json(); const v = j.items && j.items[0] && j.items[0].volumeInfo; if (v) { if (v.dimensions) b.dim = v.dimensions; if (!b.pg && v.pageCount) b.pg = v.pageCount; } } catch (e) {}
+        if (Date.now() < gbPause) { b.dim = undefined; break; }
+        try { const j = await gbFetch(`q=isbn:${b.isbn}`); const v = j.items && j.items[0] && j.items[0].volumeInfo; if (v) { if (v.dimensions) b.dim = v.dimensions; if (!b.pg && v.pageCount) b.pg = v.pageCount; } } catch (e) {}
       }
       const srcs = [b.cover, b.isbn && `https://covers.openlibrary.org/b/isbn/${b.isbn}-M.jpg?default=false`].filter(Boolean);
       for (const s of srcs) { const c = await dominant(s); if (c) { b.col = c; break; } }
       b.sp = 1; save();
       if (U.screen === 'archive' && S.layout === 'dorsi') $('#list').innerHTML = vList();
-      await new Promise(r => setTimeout(r, 250));
+      await new Promise(r => setTimeout(r, 1500));
     }
   } finally { enriching = false; }
 }
@@ -445,7 +461,7 @@ function vForm() {
   const fld = (k, l, ph = '', extra = '') => `<div class="field"><label>${l}</label><input class="in" name="${k}" value="${esc(f[k])}" placeholder="${ph}" ${extra}></div>`;
   return `<div class="scr"><div class="top nav"><button class="btn g" data-a="${edit ? 'back' : 'home'}" style="font-size:16px">${ic('back')}Annulla</button></div>
   <form class="body" data-f="book" style="display:flex;flex-direction:column;gap:14px;padding-top:6px">
-    <div><h2 style="font-size:32px">${edit ? 'Modifica libro' : 'Inserisci a mano'}</h2><p class="muted" style="margin:2px 0 0;font-size:14px">${U.notFound && !edit ? 'Non ho trovato questo ISBN online. Completa i dati.' : edit ? 'Correggi i dati del libro.' : 'Per libri senza codice a barre o edizioni datate.'}</p></div>
+    <div><h2 style="font-size:32px">${edit ? 'Modifica libro' : 'Inserisci a mano'}</h2><p class="muted" style="margin:2px 0 0;font-size:14px">${U.notFound && !edit ? 'Non ho trovato questo ISBN online' + (lastLookupErr ? ' (' + esc(lastLookupErr) + ')' : '') + '. Completa i dati.' : edit ? 'Correggi i dati del libro.' : 'Per libri senza codice a barre o edizioni datate.'}</p></div>
     ${fld('t', 'Titolo *', 'Es. Il deserto dei Tartari')}${fld('a', 'Autore *', 'Es. Dino Buzzati')}
     <div style="display:grid;grid-template-columns:minmax(0,1fr) 96px;gap:10px">${fld('p', 'Editore')}${fld('y', 'Anno', '', 'inputmode="numeric"')}</div>
     <div style="display:grid;grid-template-columns:minmax(0,1fr) 96px;gap:10px">${fld('isbn', 'ISBN (facoltativo)', '', 'inputmode="numeric"')}${fld('pg', 'Pagine', '', 'inputmode="numeric"')}</div>
@@ -523,7 +539,7 @@ const needScan = y => !y.id && (!y.info ? y.status !== 'looking' : U.linkAll && 
 async function findByTitle(t, a, p) {
   try {
     const sur = a ? a.split(',')[0].trim().split(' ').slice(-1)[0] : '';
-    const gb = async q => { const j = await (await fetch('https://www.googleapis.com/books/v1/volumes?maxResults=20&printType=books&q=' + encodeURIComponent(q))).json(); return (j.items || []).map(x => x.volumeInfo).filter(v => v && v.title); };
+    const gb = async q => { const j = await gbFetch('maxResults=20&printType=books&q=' + encodeURIComponent(q)); return (j.items || []).map(x => x.volumeInfo).filter(v => v && v.title); };
     const tt = t.replace(/"/g, '');
     let vs = await gb(`intitle:"${tt}"` + (sur ? ` inauthor:${sur}` : ''));
     if (!vs.length) vs = await gb(`${tt} ${sur}`.trim());
