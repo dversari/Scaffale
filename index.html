@@ -154,11 +154,13 @@ function norm(raw) {
 const isIsbn = d => !!d && /^97[89]\d{10}$/.test(d) && [...d].reduce((n, c, i) => n + +c * (i % 2 ? 3 : 1), 0) % 10 === 0;
 
 let gbPause = 0, lastLookupErr = '';
+const GKEY = 'scaffale.googleKey', getGKey = () => { try { return localStorage.getItem(GKEY) || ''; } catch (e) { return ''; } };
 const gbInfo = v => ({ t: v.title + (v.subtitle ? ': ' + v.subtitle : ''), a: (v.authors || []).join(', '), p: v.publisher || '', y: (v.publishedDate || '').slice(0, 4), pg: v.pageCount || '', cover: ((v.imageLinks && (v.imageLinks.thumbnail || v.imageLinks.smallThumbnail)) || '').replace('http:', 'https:'), dim: v.dimensions || null });
 async function gbFetch(q) {
   if (Date.now() < gbPause) throw new Error('Google Books in pausa (troppe richieste)');
-  const r = await fetch('https://www.googleapis.com/books/v1/volumes?' + q);
-  if (r.status === 429 || r.status === 403) { gbPause = Date.now() + 5 * 60e3; throw new Error('Google Books: troppe richieste (' + r.status + ')'); }
+  const gk = getGKey(), r = await fetch('https://www.googleapis.com/books/v1/volumes?' + q + (gk ? '&key=' + encodeURIComponent(gk) : ''));
+  if (r.status === 429 || r.status === 403) { gbPause = Date.now() + 5 * 60e3; throw new Error('Google Books: troppe richieste (' + r.status + ')' + (gk ? '' : ' · aggiungi una chiave Google dal menu ⋯')); }
+  if (r.status === 400 && gk) throw new Error('Google Books: chiave non valida');
   if (!r.ok) throw new Error('Google Books: errore ' + r.status);
   return r.json();
 }
@@ -592,12 +594,20 @@ function render() {
 function renderSheet() {
   const el = $('#sheet');
   if (!U.sheet) { el.innerHTML = ''; return; }
+  if (U.sheet === 'gkey') {
+    el.innerHTML = `<div class="bd" data-a="closeSheet"></div><div class="sh"><div style="display:flex;justify-content:space-between;align-items:center"><h3 style="font-size:26px">Chiave Google Books</h3><button class="btn g ic" data-a="closeSheet" aria-label="Chiudi" style="color:var(--text)">${ic('x')}</button></div>
+    <p class="muted" style="margin:0;font-size:14px">Senza chiave Google limita molto le ricerche. Con una chiave gratuita hai 1000 ricerche al giorno. Resta solo su questo dispositivo.</p>
+    <form data-f="gkey" style="display:flex;flex-direction:column;gap:10px"><div class="field"><label for="gkIn">Chiave API</label><input id="gkIn" class="in" name="gkey" autocomplete="off" placeholder="AIza…" value="${esc(getGKey())}"></div><button class="btn p bp">${M}Salva</button></form>
+    ${getGKey() ? `<button class="btn" data-a="delGKey">Rimuovi chiave</button>` : ''}</div>`;
+    return;
+  }
   if (U.sheet === 'menu') {
     el.innerHTML = `<div class="bd" data-a="closeSheet"></div><div class="sh"><div style="display:flex;justify-content:space-between;align-items:center"><h3 style="font-size:26px">Archivio</h3><button class="btn g ic" data-a="closeSheet" aria-label="Chiudi" style="color:var(--text)">${ic('x')}</button></div>
     <div style="border-top:1px solid var(--div)">
       <button class="menu" data-a="csv">${ic('down')}<span style="flex:1">Esporta in CSV</span><span class="muted" style="font-size:13px">per Excel o Numbers</span></button>
       <button class="menu" data-a="backup">${ic('down')}<span style="flex:1">Salva un backup</span><span class="muted" style="font-size:13px">file .json</span></button>
       <button class="menu" data-a="restore">${ic('up')}<span style="flex:1">Ripristina un backup</span></button>
+      <button class="menu" data-a="gkeySheet">${ic('search')}<span style="flex:1">Chiave Google Books</span><span class="muted" style="font-size:13px">${getGKey() ? 'impostata' : 'non impostata'}</span></button>
       ${getKey() ? `<button class="menu" data-a="delKey">${ic('x')}<span style="flex:1">Rimuovi chiave API Claude</span></button>` : ''}
     </div><p class="muted" style="margin:0;font-size:13px">I libri restano su questo dispositivo. Salva un backup ogni tanto.</p></div>`;
     return;
@@ -647,6 +657,8 @@ const A = {
     S.lastLoc = L; save(); enrich(); U.shot = null; go('archive');
     toast(`${moved + added} in ${short(L)}${added ? ` · ${added} nuovi` : ''}`);
   },
+  gkeySheet: () => { U.sheet = 'gkey'; renderSheet(); },
+  delGKey: () => { try { localStorage.removeItem(GKEY); } catch (e) {} U.sheet = null; renderSheet(); toast('Chiave Google rimossa'); },
   delKey: () => { try { localStorage.removeItem(KKEY); } catch (e) {} U.sheet = null; renderSheet(); toast('Chiave API rimossa'); },
   hintOff: () => { S.hintOff = true; save(); render(); },
   room: v => { U.room = v; render(); },
@@ -701,6 +713,7 @@ document.addEventListener('submit', e => {
   e.preventDefault();
   const f = e.target.dataset.f;
   if (f === 'isbn') { const d = norm(e.target.isbn.value); if (!isIsbn(d)) return flash('ISBN non valido', 'Servono 10 o 13 cifre'); if (U.mode === 'link') { e.target.isbn.value = ''; return linkCode(d); } camStop(); openIsbn(d); }
+  if (f === 'gkey') { const k = e.target.gkey.value.trim(); try { k ? localStorage.setItem(GKEY, k) : localStorage.removeItem(GKEY); } catch (err) {} gbPause = 0; U.sheet = null; renderSheet(); toast(k ? 'Chiave Google salvata' : 'Chiave Google rimossa'); enrich(); return; }
   if (f === 'key') { const k = e.target.key.value.trim(); if (k) { try { localStorage.setItem(KKEY, k); } catch (err) {} render(); } return; }
   if (f === 'room') { const r = e.target.room.value.trim(); if (r && !S.rooms.includes(r)) { S.rooms.push(r); save(); } if (r) U.draft.room = r; U.newRoom = false; renderSheet(); }
 });
