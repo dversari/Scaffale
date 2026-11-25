@@ -66,7 +66,10 @@ h1,h2,h3{font-family:var(--fh);font-weight:600;letter-spacing:-.015em;line-heigh
 .gh{display:flex;align-items:baseline;justify-content:space-between;gap:8px;padding-bottom:6px;border-bottom:1px solid var(--text)}
 .shelf{display:flex;align-items:flex-end;gap:3px;min-height:160px;padding:0 6px;border-bottom:2px solid var(--text);overflow-x:auto}
 .spine{all:unset;cursor:pointer;box-sizing:border-box;flex:none;border:1px solid var(--div);writing-mode:vertical-rl;transform:rotate(180deg);padding:8px 0;display:flex;align-items:center;justify-content:center;font-family:var(--fh);font-weight:600;font-size:13px;line-height:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.spine.new{border-color:var(--a);background:var(--a1)}
+.spine{box-shadow:inset 2px 0 0 rgba(255,255,255,.14),inset -2px 0 0 rgba(0,0,0,.14)}
+.spine.new{outline:2px solid var(--a);outline-offset:2px}
+.mapw svg{display:block;width:100%;height:auto;background:#d9d3ca}
+.mapw [data-a]{cursor:pointer}
 .loc{all:unset;cursor:pointer;display:grid;grid-template-columns:24px minmax(0,1fr) 20px;gap:12px;align-items:center;padding:14px;border:1px solid var(--a);box-sizing:border-box}
 .loc:active{background:color-mix(in srgb,var(--a) 10%,transparent)}
 .facts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));border-top:1px solid var(--div);border-left:1px solid var(--div)}
@@ -104,6 +107,7 @@ h1,h2,h3{font-family:var(--fh);font-weight:600;letter-spacing:-.015em;line-heigh
 <div id="sheet"></div>
 <div id="toast"></div>
 <input id="importFile" type="file" accept="application/json,.json" hidden>
+<input id="shotFile" type="file" accept="image/*" hidden>
 <script src="https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js"></script>
 <script>
 const $ = s => document.querySelector(s);
@@ -124,18 +128,22 @@ const I = {
   up: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/>',
   plus: '<path d="M5 12h14"/><path d="M12 5v14"/>',
   share: '<path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><path d="m16 6-4-4-4 4"/><path d="M12 2v13"/>',
+  cam: '<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3z"/><circle cx="12" cy="13" r="3"/>',
 };
 const ic = (n, s = 20) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex:none">${I[n]}</svg>`;
 
 const KEY = 'scaffale.v1';
 const SHELVES = ['A', 'B', 'C', 'D', 'E', 'F'];
+const MAPS = { Soggiorno: { name: 'Libreria', vb: [222, 190, 1078, 860], tv: [566, 770, 319, 200], cab: [240, 975, 1045, 75], vani: [['7',250,209,648,72,1],['6',250,293,648,72,0],['5A',300,389,127,84,1],['5B',439,389,201,72,0],['5C',766,389,114,72,0],['5D',892,389,49,84,1],['4',300,485,786,72,0],['3A',300,569,116,96,1],['3B',428,569,115,84,0],['3C',555,569,194,96,1],['3D',761,569,216,84,0],['2',300,677,740,72,0],['1A',300,773,146,190,0],['1B',458,773,108,202,1],['1C',904,773,94,190,0],['1E',1022,773,206,85,0],['1D',1022,882,94,81,0],['1F',1128,882,112,93,1]].map(([n, x, y, w, h, o]) => ({ n, x, y, w, h, o: !!o, lv: parseInt(n, 10), sh: n.replace(/^\d+/, '') })) } };
+const vanoOf = l => { const m = l && MAPS[l.room]; if (!m) return null; return m.vani.find(v => v.lv === +l.level && v.sh === (l.shelf || '')) || m.vani.find(v => v.lv === +l.level && !v.sh) || null; };
+const vname = l => { const v = vanoOf(l); return v ? v.n : `${l.level}${l.shelf || ''}`; };
 const LEVELS = [1, 2, 3, 4, 5, 6];
 const S = Object.assign({ books: [], rooms: ['Soggiorno', 'Studio', 'Camera'], lastLoc: { room: 'Soggiorno', shelf: 'A', level: 1 }, layout: 'posizione', hintOff: false }, JSON.parse(localStorage.getItem(KEY) || '{}'));
 const save = () => localStorage.setItem(KEY, JSON.stringify(S));
 const U = { screen: 'archive', q: '', room: 'Tutti', mode: 'single', queue: [], pending: null, dup: null, cur: null, loc: null, form: null, flash: null, camErr: null, loading: null, sheet: null, draft: null, newRoom: false };
 
-const short = l => `${l.room} · ${l.shelf}${l.level}`;
-const long = l => `${l.room} · Scaffale ${l.shelf} · Ripiano ${l.level}`;
+const short = l => MAPS[l.room] ? `${l.room} · ${vname(l)}` : `${l.room} · ${l.shelf}${l.level}`;
+const long = l => MAPS[l.room] ? `${l.room} · ${MAPS[l.room].name} · vano ${vname(l)}` : `${l.room} · Scaffale ${l.shelf} · Ripiano ${l.level}`;
 const initial = t => (t || '?').replace(/^(il |la |le |lo |l'|gli |i |the )/i, '').charAt(0).toUpperCase();
 function norm(raw) {
   const d = String(raw).toUpperCase().replace(/[^0-9X]/g, '');
@@ -148,12 +156,12 @@ async function lookup(isbn) {
   try {
     const j = await (await fetch(`https://www.googleapis.com/books/v1/volumes?q=isbn:${isbn}`)).json();
     const v = j.items && j.items[0] && j.items[0].volumeInfo;
-    if (v) return { t: v.title + (v.subtitle ? ': ' + v.subtitle : ''), a: (v.authors || []).join(', '), p: v.publisher || '', y: (v.publishedDate || '').slice(0, 4), pg: v.pageCount || '', cover: ((v.imageLinks && (v.imageLinks.thumbnail || v.imageLinks.smallThumbnail)) || '').replace('http:', 'https:') };
+    if (v) return { t: v.title + (v.subtitle ? ': ' + v.subtitle : ''), a: (v.authors || []).join(', '), p: v.publisher || '', y: (v.publishedDate || '').slice(0, 4), pg: v.pageCount || '', cover: ((v.imageLinks && (v.imageLinks.thumbnail || v.imageLinks.smallThumbnail)) || '').replace('http:', 'https:'), dim: v.dimensions || null };
   } catch (e) {}
   try {
     const j = await (await fetch(`https://openlibrary.org/api/books?bibkeys=ISBN:${isbn}&format=json&jscmd=data`)).json();
     const v = j['ISBN:' + isbn];
-    if (v) return { t: v.title, a: (v.authors || []).map(x => x.name).join(', '), p: (v.publishers && v.publishers[0] && v.publishers[0].name) || '', y: ((v.publish_date || '').match(/\d{4}/) || [''])[0], pg: v.number_of_pages || '', cover: (v.cover && v.cover.medium) || '' };
+    if (v) return { t: v.title, a: (v.authors || []).map(x => x.name).join(', '), p: (v.publishers && v.publishers[0] && v.publishers[0].name) || '', y: ((v.publish_date || '').match(/\d{4}/) || [''])[0], pg: v.number_of_pages || '', cover: (v.cover && v.cover.medium) || '', dim: null };
   } catch (e) {}
   return null;
 }
@@ -187,7 +195,8 @@ async function onCode(raw) {
   lastCode = raw; lastAt = now;
   if (!isIsbn(d)) { flash('Codice non riconosciuto', 'Non è un ISBN: ' + raw); return; }
   if (navigator.vibrate) navigator.vibrate(40);
-  if (U.mode === 'single') { camStop(); openIsbn(d); } else batchAdd(d);
+  if (U.mode === 'link') linkCode(d);
+  else if (U.mode === 'single') { camStop(); openIsbn(d); } else batchAdd(d);
 }
 async function openIsbn(d) {
   const ex = S.books.find(b => b.isbn === d);
@@ -212,16 +221,105 @@ function batchAdd(d) {
 }
 function addBooks(list, loc) {
   const now = new Date().toISOString();
-  const added = list.map(b => ({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), isbn: b.isbn || '', t: b.t, a: b.a || '', p: b.p || '', y: b.y || '', pg: b.pg || '', cover: b.cover || '', room: loc.room, shelf: loc.shelf, level: loc.level, added: now }));
-  S.books = [...added, ...S.books]; S.lastLoc = { ...loc }; save();
+  const added = list.map(b => ({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), isbn: b.isbn || '', t: b.t, a: b.a || '', p: b.p || '', y: b.y || '', pg: b.pg || '', cover: b.cover || '', ...(b.dim !== undefined ? { dim: b.dim } : {}), room: loc.room, shelf: loc.shelf, level: loc.level, added: now }));
+  S.books = [...added, ...S.books]; S.lastLoc = { ...loc }; save(); enrich();
   return added;
 }
 const isNew = b => b.added && Date.now() - new Date(b.added).getTime() < 36e5;
+
+/* ——— dorsi: colore dalla copertina, misure da pagine o dimensioni ——— */
+const FALL = ['#6b3a2e', '#2f4858', '#7a6a4f', '#3d5a40', '#8c2f39', '#c9b79c', '#1f2a44', '#a26b3b', '#e8e1d3', '#4a4e69', '#b4532a', '#d8c690'];
+const hashT = s => [...String(s)].reduce((n, c) => (n * 31 + c.charCodeAt(0)) >>> 0, 7);
+const isHex = c => /^#[0-9a-f]{6}$/i.test(c || '');
+function cm(v) { const n = parseFloat(v); if (!n) return 0; return /in/i.test(v) ? n * 2.54 : /mm/i.test(v) ? n / 10 : n; }
+function inkFor(hex) {
+  const c = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255).map(x => x <= .03928 ? x / 12.92 : ((x + .055) / 1.055) ** 2.4);
+  return .2126 * c[0] + .7152 * c[1] + .0722 * c[2] > .179 ? '#000' : '#fff';
+}
+function spineLook(b) {
+  const h = hashT(b.t + b.a), d = b.dim || {};
+  const th = cm(d.thickness) || ((+b.pg || 220) * 0.0065 + 0.25);
+  const ht = cm(d.height);
+  const w = Math.max(18, Math.min(68, Math.round(th * 12)));
+  const hp = ht ? Math.max(96, Math.min(196, Math.round(ht * 6.5))) : 116 + (h % 5) * 7;
+  const bg = isHex(b.col) ? b.col : FALL[h % FALL.length];
+  return { w, hp, bg, ink: inkFor(bg), fs: w < 24 ? 11 : 13 };
+}
+function dominant(src) {
+  return new Promise(res => {
+    const im = new Image(); im.crossOrigin = 'anonymous'; im.referrerPolicy = 'no-referrer';
+    const t = setTimeout(() => res(null), 8000);
+    im.onerror = () => { clearTimeout(t); res(null); };
+    im.onload = () => {
+      clearTimeout(t);
+      try {
+        if (im.naturalWidth < 4) return res(null);
+        const c = document.createElement('canvas'); c.width = c.height = 32;
+        const x = c.getContext('2d', { willReadFrequently: true }); x.drawImage(im, 0, 0, 32, 32);
+        const px = x.getImageData(0, 0, 32, 32).data, bins = {};
+        for (let i = 0; i < px.length; i += 4) {
+          const k = (px[i] >> 5) << 6 | (px[i + 1] >> 5) << 3 | px[i + 2] >> 5, wgt = (i / 4) % 32 < 11 ? 2 : 1;
+          const q = bins[k] || (bins[k] = [0, 0, 0, 0]); q[0] += px[i] * wgt; q[1] += px[i + 1] * wgt; q[2] += px[i + 2] * wgt; q[3] += wgt;
+        }
+        const top = Object.values(bins).sort((a, b) => b[3] - a[3])[0];
+        res('#' + top.slice(0, 3).map(v => Math.round(v / top[3]).toString(16).padStart(2, '0')).join(''));
+      } catch (e) { res(null); }
+    };
+    im.src = src;
+  });
+}
+let enriching = false;
+async function enrich() {
+  if (enriching) return; enriching = true;
+  try {
+    for (;;) {
+      if (!navigator.onLine) break;
+      const b = S.books.find(x => !x.sp);
+      if (!b) break;
+      if (b.isbn && b.dim === undefined) {
+        b.dim = null;
+        try { const j = await (await fetch(`https://www.googleapis.com/books/v1/volumes?q=isbn:${b.isbn}`)).json(); const v = j.items && j.items[0] && j.items[0].volumeInfo; if (v) { if (v.dimensions) b.dim = v.dimensions; if (!b.pg && v.pageCount) b.pg = v.pageCount; } } catch (e) {}
+      }
+      const srcs = [b.cover, b.isbn && `https://covers.openlibrary.org/b/isbn/${b.isbn}-M.jpg?default=false`].filter(Boolean);
+      for (const s of srcs) { const c = await dominant(s); if (c) { b.col = c; break; } }
+      b.sp = 1; save();
+      if (U.screen === 'archive' && S.layout === 'dorsi') $('#list').innerHTML = vList();
+      await new Promise(r => setTimeout(r, 250));
+    }
+  } finally { enriching = false; }
+}
 
 function go(screen) {
   if (U.screen === 'scanner' && screen !== 'scanner') camStop();
   U.screen = screen; U.sheet = null; renderSheet(); render();
   if (screen === 'scanner') camStart();
+}
+
+/* ——— disegno libreria in legno ——— */
+function woodSvg(room, o) {
+  const m = MAPS[room], [vx, vy, vw, vh] = m.vb;
+  const plank = (x, y, w, h, v) => `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}" fill="#000" filter="url(#mw${v ? 'V' : 'H'})"/><rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}" fill="none" stroke="rgba(0,0,0,.35)"/>`;
+  const fx = f => `<filter id="mw${f}" x="0" y="0" width="1" height="1" color-interpolation-filters="sRGB"><feTurbulence type="fractalNoise" baseFrequency="${f === 'H' ? '0.004 0.5' : '0.5 0.004'}" numOctaves="3" seed="${f === 'H' ? 7 : 3}"/><feColorMatrix values="0.55 0 0 0 0.18  0.48 0 0 0 0.15  0.4 0 0 0 0.11  0 0 0 0 1"/><feComposite in2="SourceGraphic" operator="in"/></filter>`;
+  const defs = `<defs>${fx('H')}${fx('V')}<linearGradient id="msh" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000" stop-opacity=".38"/><stop offset="1" stop-color="#000" stop-opacity="0"/></linearGradient></defs>`;
+  const content = v => {
+    if (o.books) {
+      const list = o.books.filter(b => b.room === room && vanoOf(b) === v).sort((p, q) => (p.pos ?? 1e9) - (q.pos ?? 1e9));
+      if (!list.length) return '';
+      const k = v.h / 30, dims = list.map(b => { const d = b.dim || {}; return { b, t: cm(d.thickness) || ((+b.pg || 220) * 0.0065 + 0.25), h: cm(d.height) || (19 + hashT(b.t + b.a) % 5) }; });
+      const tot = dims.reduce((a, d) => a + d.t * k, 0), sc = Math.min(1, (v.w - 4) / tot);
+      let x = v.x + 2;
+      return dims.map(d => { const w = Math.max(1.5, d.t * k * sc), h = Math.min(v.h - 2, d.h * k), sl = spineLook(d.b), r = `<rect data-a="open" data-v="${d.b.id}" x="${x.toFixed(1)}" y="${(v.y + v.h - h).toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}" fill="${sl.bg}" stroke="rgba(0,0,0,.3)" stroke-width=".6"><title>${esc(d.b.t)}</title></rect>`; x += w; return r; }).join('');
+    }
+    return '';
+  };
+  const box = v => { const t = 12;
+    if (v.o) return content(v);
+    return `<rect x="${v.x}" y="${v.y}" width="${v.w}" height="${v.h}" fill="#b9b1a6"/>${content(v)}<rect x="${v.x}" y="${v.y}" width="${v.w}" height="${Math.min(v.h, 22)}" fill="url(#msh)" pointer-events="none"/>`
+      + plank(v.x - t, v.y - t, v.w + 2 * t, t) + plank(v.x - t, v.y + v.h, v.w + 2 * t, t) + plank(v.x - t, v.y, t, v.h, 1) + plank(v.x + v.w, v.y, t, v.h, 1); };
+  const [cx, cy, cw, ch] = m.cab, [tx, ty, tw, th] = m.tv;
+  const cab = plank(cx, cy, cw, ch) + [0, 1, 2, 3].map(i => `<rect x="${cx + 8 + i * cw / 4}" y="${cy + 10}" width="${cw / 4 - 16}" height="${ch - 20}" fill="none" stroke="rgba(0,0,0,.4)" stroke-width="1.5"/>`).join('');
+  const pick = o.pick ? m.vani.map(v => { const on = vanoOf(o.pick) === v; return `<g data-a="pickVano" data-v="${v.n}"><rect x="${v.x - (v.o ? 0 : 4)}" y="${v.y - (v.o ? 0 : 4)}" width="${v.w + (v.o ? 0 : 8)}" height="${v.h + (v.o ? 0 : 8)}" fill="${on ? 'rgba(103,131,108,.55)' : 'rgba(255,255,255,.01)'}" stroke="${on ? '#253127' : 'rgba(255,255,255,.55)'}" stroke-width="${on ? 6 : 2}"/><text x="${v.x + v.w / 2}" y="${v.y + v.h / 2}" text-anchor="middle" dominant-baseline="central" style="font:600 ${Math.min(34, v.h * 0.5, v.w * 0.55).toFixed(0)}px 'Barlow Condensed',sans-serif;fill:#fff;paint-order:stroke;stroke:#000;stroke-width:5px;pointer-events:none">${v.n}</text></g>`; }).join('') : '';
+  return `<svg viewBox="${vx} ${vy} ${vw} ${vh}" role="img" aria-label="${esc(m.name)} ${esc(room)}">${defs}<rect x="${vx}" y="${cy - 12}" width="${vw}" height="${vh}" fill="#cbc4ba"/>${m.vani.filter(v => v.o).map(box).join('')}${m.vani.filter(v => !v.o).map(box).join('')}${cab}<rect x="${tx}" y="${ty}" width="${tw}" height="${th}" rx="3" fill="#0d1218" stroke="#000" stroke-width="3"/>${pick}</svg>`;
 }
 
 /* ——— views ——— */
@@ -240,8 +338,9 @@ function vArchive() {
     <div class="seg">${[['elenco', 'Elenco'], ['posizione', 'Posizione'], ['dorsi', 'Dorsi']].map(([k, l]) => `<button class="${S.layout === k ? 'on' : ''}" data-a="layout" data-v="${k}">${l}</button>`).join('')}</div>` : ''}
   </div>
   <div class="body" id="list">${vList()}</div>
-  <div class="bar" style="grid-template-columns:auto minmax(0,1fr)">
+  <div class="bar" style="grid-template-columns:auto auto minmax(0,1fr)">
     <button class="btn" data-a="manual" style="min-height:52px">${ic('pen', 18)}A mano</button>
+    <button class="btn" data-a="shot" style="min-height:52px">${ic('cam', 18)}Foto</button>
     <button class="btn p bp" data-a="scan">${M}${ic('scan')}Scansiona</button>
   </div></div>`;
 }
@@ -253,40 +352,42 @@ function vList() {
   if (S.layout === 'elenco') return [...f].sort((x, y) => x.t.localeCompare(y.t, 'it')).map(b => `<button class="row" data-a="open" data-v="${b.id}">
     <div class="thumb">${b.cover ? `<img src="${esc(b.cover)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : esc(initial(b.t))}</div>
     <div style="min-width:0"><div class="t1">${esc(b.t)}</div><div class="t2">${esc(b.a)}</div></div>
-    <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px"><span class="tag">${esc(b.room.slice(0, 3).toUpperCase())} · ${b.shelf}${b.level}</span>${isNew(b) ? '<span class="k" style="font-size:10px">Nuovo</span>' : ''}</div></button>`).join('');
+    <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px"><span class="tag">${esc(b.room.slice(0, 3).toUpperCase())} · ${esc(MAPS[b.room] ? vname(b) : b.shelf + b.level)}</span>${isNew(b) ? '<span class="k" style="font-size:10px">Nuovo</span>' : ''}</div></button>`).join('');
   const g = {};
-  f.forEach(b => { const k = `${String(S.rooms.indexOf(b.room)).padStart(3, '0')}${b.shelf}${b.level}`; (g[k] = g[k] || { room: b.room, sub: `Scaffale ${b.shelf} · Ripiano ${b.level}`, items: [] }).items.push(b); });
+  (S.layout === 'dorsi' ? f.filter(b => !vanoOf(b)) : f).forEach(b => { const v = vanoOf(b); const k = `${String(S.rooms.indexOf(b.room)).padStart(3, '0')}${v ? 'V' + String(v.lv).padStart(2, '0') + v.sh : b.shelf + b.level}`; (g[k] = g[k] || { room: b.room, sub: v ? `Vano ${v.n}${v.o ? ' · aperto' : ''}` : MAPS[b.room] ? `Senza vano (${b.shelf}${b.level})` : `Scaffale ${b.shelf} · Ripiano ${b.level}`, items: [] }).items.push(b); });
   const groups = Object.keys(g).sort().map(k => g[k]);
+  groups.forEach(x => x.items.sort((p, q) => (p.pos ?? 1e9) - (q.pos ?? 1e9)));
   const head = x => `<div style="display:flex;align-items:baseline;gap:8px;min-width:0"><span style="font-family:var(--fh);font-weight:600;font-size:20px">${esc(x.room)}</span><span class="k" style="font-size:12px;letter-spacing:.06em">${x.sub}</span></div><span class="muted" style="font-size:12px;flex:none">${x.items.length === 1 ? '1 libro' : x.items.length + ' libri'}</span>`;
-  if (S.layout === 'dorsi') return `<div style="display:flex;flex-direction:column;gap:26px;padding-top:6px">${groups.map(x => `<div style="display:flex;flex-direction:column;gap:8px"><div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px">${head(x)}</div>
-    <div class="shelf">${x.items.map(b => { const h = [...b.t].reduce((n, c) => n + c.charCodeAt(0), 0); const pg = +b.pg || 220; const w = Math.max(22, Math.min(58, Math.round(16 + pg / 18))); return `<button class="spine ${isNew(b) ? 'new' : ''}" data-a="open" data-v="${b.id}" title="${esc(b.t)}" style="height:${116 + (h % 5) * 7}px;width:${w}px">${esc(b.t)}</button>`; }).join('')}</div></div>`).join('')}</div>`;
+  if (S.layout === 'dorsi') return `<div style="display:flex;flex-direction:column;gap:26px;padding-top:6px">${Object.keys(MAPS).filter(r => f.some(b => b.room === r && vanoOf(b)) || (!U.q.trim() && (U.room === 'Tutti' || U.room === r))).map(r => { const n = f.filter(b => b.room === r && vanoOf(b)).length; return `<div style="display:flex;flex-direction:column;gap:8px"><div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px"><div style="display:flex;align-items:baseline;gap:8px"><span style="font-family:var(--fh);font-weight:600;font-size:20px">${esc(r)}</span><span class="k" style="font-size:12px;letter-spacing:.06em">${esc(MAPS[r].name)}</span></div><span class="muted" style="font-size:12px">${n === 1 ? '1 libro' : n + ' libri'}</span></div><div class="mapw">${woodSvg(r, { books: f })}</div>${n ? '' : `<p class="muted" style="margin:0;font-size:14px">Nessun libro ancora in questa libreria. Apri un libro e tocca la posizione, oppure usa «Foto» davanti a un ripiano.</p>`}</div>`; }).join('')}${groups.map(x => `<div style="display:flex;flex-direction:column;gap:8px"><div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px">${head(x)}</div>
+    <div class="shelf">${x.items.map(b => { const s = spineLook(b); return `<button class="spine ${isNew(b) ? 'new' : ''}" data-a="open" data-v="${b.id}" title="${esc(b.t)}" style="height:${s.hp}px;width:${s.w}px;background:${s.bg};color:${s.ink};font-size:${s.fs}px">${esc(b.t)}</button>`; }).join('')}</div></div>`).join('')}</div>`;
   return `<div style="display:flex;flex-direction:column;gap:22px">${groups.map(x => `<div><div class="gh">${head(x)}</div>${x.items.map(b => `<button class="row" data-a="open" data-v="${b.id}" style="grid-template-columns:minmax(0,1fr) auto;padding:11px 0">
     <div style="min-width:0"><div class="t1">${esc(b.t)}</div><div class="t2">${esc(b.a)}${b.y ? ' · ' + esc(b.y) : ''}</div></div>
     <div style="display:flex;align-items:center;gap:8px;color:var(--n4)">${isNew(b) ? '<span class="tag">Nuovo</span>' : ''}${ic('next', 16)}</div></button>`).join('')}</div>`).join('')}</div>`;
 }
 function vScanner() {
-  const single = U.mode === 'single';
+  const single = U.mode === 'single', link = U.mode === 'link';
+  const lx = link && U.shot && U.shot.items[U.linkIdx], left = link && U.shot ? U.shot.items.filter(y => !y.id && !y.info).length : 0;
   return `<div class="scr dark"><div class="shade"></div>
   <div style="position:relative;padding:calc(var(--sat) + 8px) 12px 0;display:grid;grid-template-columns:44px minmax(0,1fr) 44px;align-items:center">
-    <button class="dbtn" data-a="home" aria-label="Chiudi">${ic('x', 22)}</button>
-    <div style="justify-self:center;display:flex;border:1px solid rgba(242,240,235,.4);background:rgba(29,31,32,.4)">
+    <button class="dbtn" data-a="${link ? 'linkDone' : 'home'}" aria-label="Chiudi">${ic('x', 22)}</button>
+    ${link ? '<div style="justify-self:center;font-family:var(--fh);font-weight:600;font-size:16px">Abbina l\'edizione</div>' : ''}<div style="justify-self:center;display:${link ? 'none' : 'flex'};border:1px solid rgba(242,240,235,.4);background:rgba(29,31,32,.4)">
       ${[['single', 'Singola'], ['batch', 'Serie']].map(([k, l]) => `<button data-a="mode" data-v="${k}" style="all:unset;cursor:pointer;height:36px;padding:0 16px;font-family:var(--fh);font-weight:600;font-size:15px;${U.mode === k ? 'background:var(--bg);color:var(--text)' : ''}">${l}</button>`).join('')}
     </div><span></span>
   </div>
   <div style="position:relative;flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;padding:0 20px">
     <div class="frame bp">${M}${U.camErr ? '' : '<div class="line"></div>'}</div>
     <div style="text-align:center;display:flex;flex-direction:column;gap:4px;max-width:300px">
-      <div style="font-family:var(--fh);font-weight:600;font-size:22px">${U.camErr ? 'Fotocamera non attiva' : single ? 'Inquadra il codice a barre' : 'Lettura in serie'}</div>
-      <div style="font-size:14px;color:rgba(242,240,235,.75)">${esc(U.camErr || (single ? 'Di solito è sul retro, in basso.' : 'Passa un libro dopo l\'altro davanti alla fotocamera.'))}</div>
+      <div style="font-family:var(--fh);font-weight:600;font-size:22px">${U.camErr ? 'Fotocamera non attiva' : link ? esc('Codice di «' + (lx ? lx.t : '') + '»') : single ? 'Inquadra il codice a barre' : 'Lettura in serie'}</div>
+      <div style="font-size:14px;color:rgba(242,240,235,.75)">${esc(U.camErr || (link ? 'Prendi il libro dallo scaffale e inquadra il codice sul retro.' : single ? 'Di solito è sul retro, in basso.' : 'Passa un libro dopo l\'altro davanti alla fotocamera.'))}</div>
     </div>
     ${U.flash ? `<div class="flash">${ic('check', 18)}<div style="min-width:0"><div class="t1" style="font-size:17px">${esc(U.flash.t)}</div><div style="font-size:12px;color:var(--a3)">${esc(U.flash.note)}</div></div></div>` : ''}
   </div>
-  ${single ? `<div style="position:relative;padding:0 20px calc(var(--sab) + 20px);display:flex;flex-direction:column;gap:10px">
+  ${single || link ? `<div style="position:relative;padding:0 20px calc(var(--sab) + 20px);display:flex;flex-direction:column;gap:10px">
     <form data-f="isbn" style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px">
       <input name="isbn" class="in" inputmode="numeric" placeholder="Oppure digita l'ISBN" style="background:rgba(29,31,32,.55);color:var(--bg);border-color:rgba(242,240,235,.35)">
       <button class="btn" style="color:var(--bg);border-color:rgba(242,240,235,.35);background:rgba(29,31,32,.55)">Cerca</button>
     </form>
-    <button class="dbtn" data-a="manual">${ic('pen', 18)}Libro senza codice? Inserisci a mano</button>
+    ${link ? `<button class="dbtn" data-a="linkSkip">Salta questo libro${left > 1 ? ' · ne restano ' + left : ''}</button>` : `<button class="dbtn" data-a="manual">${ic('pen', 18)}Libro senza codice? Inserisci a mano</button>`}
   </div>` : `<div class="tray" style="position:relative;padding:14px 20px calc(var(--sab) + 14px);display:flex;flex-direction:column;gap:10px">
     <div style="display:flex;justify-content:space-between;align-items:baseline"><span class="k">Letti in questa serie</span><span style="font-family:var(--fh);font-weight:600;font-size:20px">${U.queue.length === 1 ? '1 libro' : U.queue.length + ' libri'}</span></div>
     <div style="min-height:96px">${U.queue.length ? [...U.queue].reverse().slice(0, 3).map(x => `<div style="display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px solid var(--div);font-size:14px"><span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(x.t)}</span><span class="muted" style="flex:none;font-size:12px">${x.dup ? 'già presente' : x.status === 'loading' ? '…' : x.status === 'missing' ? 'da completare' : esc((x.a || '').split(',')[0].split(' ').slice(-1)[0])}</span></div>`).join('') : '<div class="muted" style="font-size:13px;padding:8px 0">Ogni codice letto finisce qui. Alla fine scegli la posizione per tutti.</div>'}</div>
@@ -345,9 +446,91 @@ function vBatch() {
   </div>
   <div class="bar"><button class="btn p bp" data-a="saveBatch" ${inc ? '' : 'disabled'}>${M}${inc === 1 ? 'Archivia 1 libro' : 'Archivia ' + inc + ' libri'}</button></div></div>`;
 }
+/* ——— foto scaffale ——— */
+const KKEY = 'scaffale.claudeKey';
+const getKey = () => { try { return localStorage.getItem(KKEY) || ''; } catch (e) { return ''; } };
+async function shrink(file) {
+  const url = URL.createObjectURL(file);
+  const im = new Image();
+  await new Promise((r, j) => { im.onload = r; im.onerror = () => j(new Error('immagine non leggibile')); im.src = url; });
+  const s = Math.min(1, 1568 / Math.max(im.naturalWidth, im.naturalHeight));
+  const c = document.createElement('canvas'); c.width = Math.round(im.naturalWidth * s); c.height = Math.round(im.naturalHeight * s);
+  c.getContext('2d').drawImage(im, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
+  return c.toDataURL('image/jpeg', 0.85);
+}
+async function readShelf(img) {
+  const cat = S.books.map(b => `${b.id}|${b.t}|${b.a}`).join('\n');
+  const body = {
+    model: 'claude-sonnet-5-5', max_tokens: 4096,
+    tools: [{ name: 'dorsi', description: 'Libri visibili nella foto, da sinistra a destra.', input_schema: { type: 'object', required: ['libri'], properties: { libri: { type: 'array', items: { type: 'object', required: ['titolo', 'certezza'], properties: {
+      id: { type: ['string', 'null'], description: 'id del catalogo se il libro è nel catalogo, altrimenti null' },
+      titolo: { type: 'string' }, autore: { type: 'string' }, certezza: { type: 'string', enum: ['alta', 'media', 'bassa'] } } } } } } }],
+    tool_choice: { type: 'tool', name: 'dorsi' },
+    messages: [{ role: 'user', content: [
+      { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: img.split(',')[1] } },
+      { type: 'text', text: `Questa è la foto di un ripiano di libreria. Leggi i dorsi nell'ordine in cui compaiono da sinistra a destra (per i libri impilati in orizzontale, dall'alto in basso). Per ogni libro: se corrisponde a uno del catalogo qui sotto, indica il suo id; altrimenti id null, con titolo e autore come li leggi sul dorso. Non inventare: includi un dorso poco leggibile solo se ne leggi almeno parte del titolo, con certezza bassa.\n\nCatalogo (id|titolo|autore):\n${cat || '(vuoto)'}` }] }]
+  };
+  const r = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers: { 'content-type': 'application/json', 'x-api-key': getKey(), 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' }, body: JSON.stringify(body) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(r.status === 401 ? 'chiave API non valida' : (j.error && j.error.message) || 'errore ' + r.status);
+  const tu = (j.content || []).find(c => c.type === 'tool_use');
+  return (tu && tu.input && tu.input.libri) || [];
+}
+let linkBusy = false;
+async function linkCode(d) {
+  const x = U.shot && U.shot.items[U.linkIdx];
+  if (!x || linkBusy) return;
+  linkBusy = true;
+  try {
+    const ex = S.books.find(b => b.isbn === d);
+    if (ex) {
+      if (U.shot.items.some(y => y !== x && y.id === ex.id)) { flash('Già in questa foto', ex.t); return; }
+      Object.assign(x, { id: ex.id, info: null, include: true }); flash(ex.t, 'Era già in archivio · abbinato');
+    } else {
+      flash('ISBN ' + d, 'Cerco l\'edizione…');
+      const info = await lookup(d);
+      Object.assign(x, { info: info ? { isbn: d, ...info } : { isbn: d, t: x.t, a: x.a }, include: true });
+      flash(x.info.t, info ? 'Edizione registrata' : 'Edizione non trovata online: tengo titolo e autore letti');
+    }
+    setTimeout(nextLink, 1300);
+  } finally { setTimeout(() => { linkBusy = false; }, 1300); }
+}
+function nextLink() {
+  if (U.screen !== 'scanner' || U.mode !== 'link') return;
+  const i = U.shot.items.findIndex((y, k) => k > U.linkIdx && !y.id && !y.info);
+  if (i < 0) { U.mode = 'single'; go('shot'); return; }
+  U.linkIdx = i; lastCode = ''; U.flash = null; render();
+}
+function vShot() {
+  const s = U.shot || { phase: 'ready' };
+  const top = `<div class="top nav"><button class="btn g" data-a="home" style="font-size:16px">${ic('back')}Archivio</button><span class="k" style="padding-right:8px;color:var(--n7)">Foto scaffale</span></div>`;
+  const pic = s.img ? `<img src="${s.img}" alt="Foto del ripiano" style="width:100%;max-height:${s.phase === 'review' ? 22 : 42}vh;object-fit:contain;border:1px solid var(--div)">` : '';
+  let body = '', bar = '';
+  if (!getKey()) {
+    body = `<div><h2 style="font-size:32px">Collega Claude</h2><p class="muted" style="margin:4px 0 0;font-size:14px">Per leggere i dorsi serve una chiave API Anthropic (console.anthropic.com → API Keys). Resta salvata solo su questo dispositivo e non finisce nei backup. La puoi togliere dal menu ⋯.</p></div>
+    <form data-f="key" style="display:flex;flex-direction:column;gap:10px"><div class="field"><label for="keyIn">Chiave API</label><input id="keyIn" class="in" name="key" type="password" autocomplete="off" placeholder="sk-ant-…"></div><button class="btn p bp">${M}Salva chiave</button></form>`;
+  } else if (s.phase === 'working') {
+    body = `${pic}<div style="text-align:center;display:flex;flex-direction:column;gap:4px"><h2 style="font-size:26px">Leggo i dorsi…</h2><p class="muted" style="margin:0;font-size:14px">Di solito 10–30 secondi.</p></div>`;
+  } else if (s.phase === 'review') {
+    const inc = s.items.filter(x => x.include).length, todo = s.items.filter(x => !x.id && !x.info).length;
+    body = `${pic}<div><div class="k">${s.items.length === 1 ? '1 dorso letto' : s.items.length + ' dorsi letti'}</div><h2 style="font-size:30px;margin-top:2px">Controlla prima di salvare</h2></div>${locBtn('Ripiano fotografato', U.loc)}
+    ${todo ? `<div class="hint">${ic('scan', 18)}<span>${todo === 1 ? '1 libro non è in archivio' : todo + ' libri non sono in archivio'}: scansiona il codice per registrare l'edizione giusta. Quelli non scansionati non vengono salvati.</span></div>` : ''}
+    ${s.items.length ? `<div style="border-top:1px solid var(--div)">${s.items.map((x, i) => {
+      const b = x.id && S.books.find(y => y.id === x.id), d = b || x.info || x;
+      const note = b ? (b.room === U.loc.room && b.shelf === U.loc.shelf && +b.level === +U.loc.level ? 'già qui' : 'in archivio · ora in ' + short(b)) : x.info ? 'nuovo · edizione dal codice' + (x.info.isbn ? ' ' + x.info.isbn : '') : 'non in archivio · tocca per scansionare';
+      return `<button class="row" data-a="shotToggle" data-v="${i}" style="grid-template-columns:24px minmax(0,1fr) auto">${!x.id && !x.info ? `<span style="color:var(--a7)">${ic('scan', 22)}</span>` : `<span class="check ${x.include ? 'on' : ''}">${x.include ? ic('check', 14) : ''}</span>`}<div style="min-width:0"><div class="t1">${esc(d.t)}</div><div class="t2">${esc(d.a || '—')} · ${esc(note)}</div></div>${x.conf === 'bassa' ? '<span class="tag n">Incerto</span>' : ''}</button>`;
+    }).join('')}</div>` : '<div class="hint">Nessun dorso riconosciuto. Prova più vicino, con più luce e il telefono dritto.</div>'}`;
+    bar = `${todo ? `<button class="btn p bp" data-a="linkStart">${M}${ic('scan')}Scansiona ${todo === 1 ? '1 codice mancante' : todo + ' codici mancanti'}</button>` : ''}<button class="btn ${todo ? '' : 'p bp'}" data-a="saveShot" ${inc ? '' : 'disabled'}>${todo ? '' : M}${inc === 1 ? 'Salva 1 libro' : 'Salva ' + inc + ' libri'} → ${esc(short(U.loc))}</button><button class="btn g" data-a="shotPick">${ic('cam', 18)}Rifai foto</button>`;
+  } else {
+    body = `<div><h2 style="font-size:32px">Fotografa un ripiano</h2><p class="muted" style="margin:4px 0 0;font-size:14px">Un ripiano per foto, inquadrato dritto, con i dorsi leggibili. Dopo la lettura controlli l'elenco: i libri confermati vengono messi qui, nell'ordine della foto.</p></div>${locBtn('Ripiano fotografato', U.loc)}${s.err ? `<div class="hint">${esc(s.err)}</div>` : ''}`;
+    bar = `<button class="btn p bp" data-a="shotPick">${M}${ic('cam')}Scatta o scegli foto</button>`;
+  }
+  return `<div class="scr">${top}<div class="body" style="display:flex;flex-direction:column;gap:16px;padding-top:6px">${body}</div>${bar ? `<div class="bar">${bar}</div>` : ''}</div>`;
+}
+
 function render() {
   const s = U.screen;
-  $('#app').innerHTML = s === 'archive' ? vArchive() : s === 'scanner' ? vScanner() : s === 'result' || s === 'detail' ? vBook() : s === 'manual' || s === 'edit' ? vForm() : s === 'batch' ? vBatch() : '';
+  $('#app').innerHTML = s === 'archive' ? vArchive() : s === 'scanner' ? vScanner() : s === 'result' || s === 'detail' ? vBook() : s === 'manual' || s === 'edit' ? vForm() : s === 'batch' ? vBatch() : s === 'shot' ? vShot() : '';
 }
 function renderSheet() {
   const el = $('#sheet');
@@ -358,6 +541,7 @@ function renderSheet() {
       <button class="menu" data-a="csv">${ic('down')}<span style="flex:1">Esporta in CSV</span><span class="muted" style="font-size:13px">per Excel o Numbers</span></button>
       <button class="menu" data-a="backup">${ic('down')}<span style="flex:1">Salva un backup</span><span class="muted" style="font-size:13px">file .json</span></button>
       <button class="menu" data-a="restore">${ic('up')}<span style="flex:1">Ripristina un backup</span></button>
+      ${getKey() ? `<button class="menu" data-a="delKey">${ic('x')}<span style="flex:1">Rimuovi chiave API Claude</span></button>` : ''}
     </div><p class="muted" style="margin:0;font-size:13px">I libri restano su questo dispositivo. Salva un backup ogni tanto.</p></div>`;
     return;
   }
@@ -369,9 +553,10 @@ function renderSheet() {
       ${opts(S.rooms, 3, 'room', d.room)}
       ${U.newRoom ? `<form data-f="room" style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px"><input name="room" class="in" placeholder="Es. Corridoio" autofocus><button class="btn">Aggiungi</button></form>` : `<button class="btn g" data-a="newRoom" style="justify-self:start">${ic('plus', 18)}Nuova stanza</button>`}
     </div>
-    <div style="display:flex;flex-direction:column;gap:6px"><div class="k muted" style="color:var(--n7)">Scaffale</div>${opts(SHELVES, 6, 'shelf', d.shelf)}</div>
-    <div style="display:flex;flex-direction:column;gap:6px"><div class="k muted" style="color:var(--n7)">Ripiano</div>${opts(LEVELS.map(String), 6, 'level', String(d.level))}</div>
-    <button class="btn p bp" data-a="confirmLoc" style="margin-top:4px">${M}Conferma · ${esc(short(d))}</button></div>`;
+    ${MAPS[d.room] ? `<div style="display:flex;flex-direction:column;gap:6px"><div class="k muted" style="color:var(--n7)">Vano · tocca sullo schema</div><div class="mapw">${woodSvg(d.room, { pick: d })}</div></div>`
+    : `<div style="display:flex;flex-direction:column;gap:6px"><div class="k muted" style="color:var(--n7)">Scaffale</div>${opts(SHELVES, 6, 'shelf', d.shelf)}</div>
+    <div style="display:flex;flex-direction:column;gap:6px"><div class="k muted" style="color:var(--n7)">Ripiano</div>${opts(LEVELS.map(String), 6, 'level', String(d.level))}</div>`}
+    <button class="btn p bp" data-a="confirmLoc" style="margin-top:4px" ${!MAPS[d.room] || vanoOf(d) ? '' : 'disabled'}>${M}${!MAPS[d.room] || vanoOf(d) ? 'Conferma · ' + esc(short(d)) : 'Scegli un vano sullo schema'}</button></div>`;
   const ri = el.querySelector('input[name=room]'); if (ri) ri.focus();
 }
 function download(text, name, type) {
@@ -382,10 +567,28 @@ const stamp = () => new Date().toISOString().slice(0, 10);
 /* ——— actions ——— */
 const A = {
   home: () => go('archive'),
-  scan: () => { U.queue = []; U.flash = null; lastCode = ''; go('scanner'); },
+  scan: () => { if (U.mode === 'link') U.mode = 'single'; U.queue = []; U.flash = null; lastCode = ''; go('scanner'); },
   scanKeep: () => go('scanner'),
   manual: () => { U.form = { t: '', a: '', p: '', y: '', isbn: '', pg: '' }; U.loc = { ...S.lastLoc }; U.notFound = false; go('manual'); },
   menu: () => { U.sheet = 'menu'; renderSheet(); },
+  shot: () => { U.shot = { phase: 'ready' }; U.loc = { ...S.lastLoc }; go('shot'); },
+  shotPick: () => $('#shotFile').click(),
+  shotToggle: v => { const x = U.shot.items[+v]; if (!x.id && !x.info) return A.linkStart(v); x.include = !x.include; render(); },
+  linkStart: v => { const i = v !== undefined && v !== '' ? +v : U.shot.items.findIndex(y => !y.id && !y.info); if (i < 0) return; U.linkIdx = i; U.mode = 'link'; U.flash = null; lastCode = ''; go('scanner'); },
+  linkSkip: () => nextLink(),
+  linkDone: () => { U.mode = 'single'; go('shot'); },
+  saveShot: () => {
+    const L = { ...U.loc }; let moved = 0, added = 0;
+    U.shot.items.forEach((x, i) => {
+      if (!x.include) return;
+      const b = x.id && S.books.find(y => y.id === x.id);
+      if (b) { Object.assign(b, { room: L.room, shelf: L.shelf, level: L.level, pos: i }); moved++; }
+      else if (x.info) { const [nb] = addBooks([x.info], L); nb.pos = i; added++; }
+    });
+    S.lastLoc = L; save(); enrich(); U.shot = null; go('archive');
+    toast(`${moved + added} in ${short(L)}${added ? ` · ${added} nuovi` : ''}`);
+  },
+  delKey: () => { try { localStorage.removeItem(KKEY); } catch (e) {} U.sheet = null; renderSheet(); toast('Chiave API rimossa'); },
   hintOff: () => { S.hintOff = true; save(); render(); },
   room: v => { U.room = v; render(); },
   layout: v => { S.layout = v; save(); render(); },
@@ -401,16 +604,17 @@ const A = {
   remove: () => { const b = S.books.find(x => x.id === U.cur); if (!confirm(`Rimuovere «${b.t}» dall'archivio?`)) return; S.books = S.books.filter(x => x.id !== b.id); save(); go('archive'); toast('Rimosso: ' + b.t); },
   saveForm: () => {
     const f = U.form, clean = { t: f.t.trim(), a: f.a.trim(), p: f.p.trim(), y: f.y.trim(), pg: String(f.pg || '').trim(), isbn: norm(f.isbn) || f.isbn.replace(/\D/g, '') };
-    if (U.screen === 'edit') { const b = S.books.find(x => x.id === U.cur); Object.assign(b, clean, U.loc); S.lastLoc = { ...U.loc }; save(); go('detail'); toast('Modifiche salvate'); }
+    if (U.screen === 'edit') { const b = S.books.find(x => x.id === U.cur); if (clean.isbn !== b.isbn) { delete b.sp; delete b.col; delete b.dim; } Object.assign(b, clean, U.loc); S.lastLoc = { ...U.loc }; save(); enrich(); go('detail'); toast('Modifiche salvate'); }
     else { const [b] = addBooks([clean], U.loc); go('archive'); toast(`${b.t} → ${short(U.loc)}`); }
   },
   sheetLoc: () => { const det = U.screen === 'detail' ? S.books.find(x => x.id === U.cur) : null; U.draft = det ? { room: det.room, shelf: det.shelf, level: det.level } : { ...(U.loc || S.lastLoc) }; U.newRoom = false; U.sheet = 'loc'; renderSheet(); },
   closeSheet: () => { U.sheet = null; renderSheet(); },
-  pick: (v, el) => { const k = el.dataset.k; U.draft[k] = k === 'level' ? +v : v; renderSheet(); },
+  pick: (v, el) => { const k = el.dataset.k; U.draft[k] = k === 'level' ? +v : v; if (k === 'room' && !MAPS[v] && !SHELVES.includes(U.draft.shelf)) { U.draft.shelf = 'A'; U.draft.level = 1; } renderSheet(); },
+  pickVano: v => { const m = String(v).match(/^(\d+)(.*)$/); if (!m) return; U.draft.level = +m[1]; U.draft.shelf = m[2]; renderSheet(); },
   newRoom: () => { U.newRoom = true; renderSheet(); },
   confirmLoc: () => {
     const l = { ...U.draft };
-    if (U.screen === 'detail') { const b = S.books.find(x => x.id === U.cur); Object.assign(b, l); S.lastLoc = l; save(); toast('Spostato in ' + short(l)); }
+    if (U.screen === 'detail') { const b = S.books.find(x => x.id === U.cur); Object.assign(b, l); delete b.pos; S.lastLoc = l; save(); toast('Spostato in ' + short(l)); }
     else U.loc = l;
     U.sheet = null; renderSheet(); render();
   },
@@ -437,7 +641,8 @@ document.addEventListener('input', e => {
 document.addEventListener('submit', e => {
   e.preventDefault();
   const f = e.target.dataset.f;
-  if (f === 'isbn') { const d = norm(e.target.isbn.value); if (!isIsbn(d)) return flash('ISBN non valido', 'Servono 10 o 13 cifre'); camStop(); openIsbn(d); }
+  if (f === 'isbn') { const d = norm(e.target.isbn.value); if (!isIsbn(d)) return flash('ISBN non valido', 'Servono 10 o 13 cifre'); if (U.mode === 'link') { e.target.isbn.value = ''; return linkCode(d); } camStop(); openIsbn(d); }
+  if (f === 'key') { const k = e.target.key.value.trim(); if (k) { try { localStorage.setItem(KKEY, k); } catch (err) {} render(); } return; }
   if (f === 'room') { const r = e.target.room.value.trim(); if (r && !S.rooms.includes(r)) { S.rooms.push(r); save(); } if (r) U.draft.room = r; U.newRoom = false; renderSheet(); }
 });
 $('#importFile').addEventListener('change', async e => {
@@ -446,14 +651,45 @@ $('#importFile').addEventListener('change', async e => {
   try {
     const j = JSON.parse(await file.text());
     if (!Array.isArray(j.books)) throw 0;
+    if (j.mode === 'merge') {
+      const key = b => b.isbn || (String(b.t) + '|' + String(b.a)).toLowerCase();
+      const have = new Set(S.books.map(key));
+      const add = j.books.filter(b => b && b.t && !have.has(key(b))).map(b => ({ ...b, id: String(b.id || Date.now().toString(36) + Math.random().toString(36).slice(2, 6)), level: +b.level || 1 }));
+      const skip = j.books.length - add.length;
+      if (!add.length) { alert('Tutti i libri del file sono già nell\'archivio.'); return; }
+      if (!confirm(`Aggiungere ${add.length} libri all'archivio?${skip ? ` ${skip} già presenti verranno saltati.` : ''} I libri attuali restano.`)) return;
+      S.books = [...S.books, ...add];
+      (Array.isArray(j.rooms) ? j.rooms : []).forEach(r => { if (r && !S.rooms.includes(r)) S.rooms.push(r); });
+      save(); U.sheet = null; renderSheet(); render(); enrich(); toast(`${add.length} libri importati`);
+      return;
+    }
     if (!confirm(`Sostituire l'archivio attuale con ${j.books.length} libri dal backup?`)) return;
     S.books = j.books; if (Array.isArray(j.rooms)) S.rooms = j.rooms; save();
-    U.sheet = null; renderSheet(); render(); toast(`${j.books.length} libri ripristinati`);
+    U.sheet = null; renderSheet(); render(); enrich(); toast(`${j.books.length} libri ripristinati`);
   } catch (err) { alert('File di backup non valido.'); }
+});
+$('#shotFile').addEventListener('change', async e => {
+  const file = e.target.files[0]; e.target.value = '';
+  if (!file) return;
+  U.shot = { phase: 'working', img: null }; render();
+  try {
+    const img = await shrink(file); U.shot.img = img; render();
+    const libri = await readShelf(img);
+    const seen = new Set();
+    const items = libri.map(l => {
+      const b = l.id && S.books.find(x => x.id === String(l.id));
+      if (b) { if (seen.has(b.id)) return null; seen.add(b.id); }
+      return { id: b ? b.id : null, t: l.titolo || '', a: l.autore || '', conf: l.certezza || 'media', include: !!b, status: b ? 'ok' : 'todo', info: null };
+    }).filter(x => x && (x.id || x.t));
+    U.shot = { phase: 'review', img, items }; render();
+  } catch (err) {
+    U.shot = { phase: 'ready', err: 'Non sono riuscito a leggere la foto: ' + (err.message || err) + '.' }; render();
+  }
 });
 document.addEventListener('visibilitychange', () => { if (document.hidden) camStop(); else if (U.screen === 'scanner') camStart(); });
 
 render();
+enrich();
 if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('./sw.js').catch(() => {});
 </script>
 </body>
