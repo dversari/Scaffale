@@ -366,7 +366,7 @@ function vList() {
 }
 function vScanner() {
   const single = U.mode === 'single', link = U.mode === 'link';
-  const lx = link && U.shot && U.shot.items[U.linkIdx], left = link && U.shot ? U.shot.items.filter(y => !y.id && !y.info).length : 0;
+  const lx = link && U.shot && U.shot.items[U.linkIdx], left = link && U.shot ? U.shot.items.filter(needScan).length : 0;
   return `<div class="scr dark"><div class="shade"></div>
   <div style="position:relative;padding:calc(var(--sat) + 8px) 12px 0;display:grid;grid-template-columns:44px minmax(0,1fr) 44px;align-items:center">
     <button class="dbtn" data-a="${link ? 'linkDone' : 'home'}" aria-label="Chiudi">${ic('x', 22)}</button>
@@ -464,11 +464,11 @@ async function readShelf(img) {
     model: 'claude-sonnet-5-5', max_tokens: 4096,
     tools: [{ name: 'dorsi', description: 'Libri visibili nella foto, da sinistra a destra.', input_schema: { type: 'object', required: ['libri'], properties: { libri: { type: 'array', items: { type: 'object', required: ['titolo', 'certezza'], properties: {
       id: { type: ['string', 'null'], description: 'id del catalogo se il libro è nel catalogo, altrimenti null' },
-      titolo: { type: 'string' }, autore: { type: 'string' }, certezza: { type: 'string', enum: ['alta', 'media', 'bassa'] } } } } } } }],
+      titolo: { type: 'string' }, autore: { type: 'string' }, editore: { type: 'string', description: 'editore se leggibile sul dorso' }, certezza: { type: 'string', enum: ['alta', 'media', 'bassa'] } } } } } } }],
     tool_choice: { type: 'auto' },
     messages: [{ role: 'user', content: [
       { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: img.split(',')[1] } },
-      { type: 'text', text: `Questa è la foto di un ripiano di libreria. Leggi i dorsi nell'ordine in cui compaiono da sinistra a destra (per i libri impilati in orizzontale, dall'alto in basso). Per ogni libro: se corrisponde a uno del catalogo qui sotto, indica il suo id; altrimenti id null, con titolo e autore come li leggi sul dorso. Non inventare: includi un dorso poco leggibile solo se ne leggi almeno parte del titolo, con certezza bassa. Rispondi solo chiamando lo strumento dorsi.\n\nCatalogo (id|titolo|autore):\n${cat || '(vuoto)'}` }] }]
+      { type: 'text', text: `Questa è la foto di un ripiano di libreria. Leggi i dorsi nell'ordine in cui compaiono da sinistra a destra (per i libri impilati in orizzontale, dall'alto in basso). Per ogni libro: se corrisponde a uno del catalogo qui sotto, indica il suo id; altrimenti id null, con titolo, autore ed editore (se stampato sul dorso) come li leggi. Non inventare: includi un dorso poco leggibile solo se ne leggi almeno parte del titolo, con certezza bassa. Rispondi solo chiamando lo strumento dorsi.\n\nCatalogo (id|titolo|autore):\n${cat || '(vuoto)'}` }] }]
   };
   const r = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers: { 'content-type': 'application/json', 'x-api-key': getKey(), 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' }, body: JSON.stringify(body) });
   const j = await r.json().catch(() => ({}));
@@ -493,15 +493,29 @@ async function linkCode(d) {
     } else {
       flash('ISBN ' + d, 'Cerco l\'edizione…');
       const info = await lookup(d);
-      Object.assign(x, { info: info ? { isbn: d, ...info } : { isbn: d, t: x.t, a: x.a }, include: true });
+      Object.assign(x, { info: info ? { isbn: d, ...info, src: 'codice' } : { isbn: d, t: x.t, a: x.a, src: 'codice' }, include: true });
       flash(x.info.t, info ? 'Edizione registrata' : 'Edizione non trovata online: tengo titolo e autore letti');
     }
     setTimeout(nextLink, 1300);
   } finally { setTimeout(() => { linkBusy = false; }, 1300); }
 }
+const needScan = y => !y.id && (!y.info ? y.status !== 'looking' : U.linkAll && y.include && y.info.src === 'titolo');
+async function findByTitle(t, a, p) {
+  try {
+    const sur = a ? a.split(',')[0].trim().split(' ').slice(-1)[0] : '';
+    const q = `intitle:"${t.replace(/"/g, '')}"` + (sur ? ` inauthor:${sur}` : '');
+    const j = await (await fetch('https://www.googleapis.com/books/v1/volumes?maxResults=10&printType=books&q=' + encodeURIComponent(q))).json();
+    const vs = (j.items || []).map(x => x.volumeInfo).filter(v => v && v.title);
+    if (!vs.length) return null;
+    const pn = (p || '').toLowerCase().replace(/editore|edizioni|editrice/g, '').trim().split(/\s+/)[0] || '';
+    const isbnOf = v => { const ids = v.industryIdentifiers || []; const id = ids.find(x => x.type === 'ISBN_13') || ids.find(x => x.type === 'ISBN_10'); return id ? (norm(id.identifier) || '') : ''; };
+    const v = (pn && vs.find(x => (x.publisher || '').toLowerCase().includes(pn) && isbnOf(x))) || vs.find(x => x.language === 'it' && isbnOf(x)) || vs.find(isbnOf) || vs[0];
+    return { t: v.title + (v.subtitle ? ': ' + v.subtitle : ''), a: (v.authors || []).join(', '), p: v.publisher || '', y: (v.publishedDate || '').slice(0, 4), pg: v.pageCount || '', cover: ((v.imageLinks && (v.imageLinks.thumbnail || v.imageLinks.smallThumbnail)) || '').replace('http:', 'https:'), dim: v.dimensions || null, isbn: isbnOf(v), src: 'titolo' };
+  } catch (e) { return null; }
+}
 function nextLink() {
   if (U.screen !== 'scanner' || U.mode !== 'link') return;
-  const i = U.shot.items.findIndex((y, k) => k > U.linkIdx && !y.id && !y.info);
+  const i = U.shot.items.findIndex((y, k) => k > U.linkIdx && needScan(y));
   if (i < 0) { U.mode = 'single'; go('shot'); return; }
   U.linkIdx = i; lastCode = ''; U.flash = null; render();
 }
@@ -516,15 +530,15 @@ function vShot() {
   } else if (s.phase === 'working') {
     body = `${pic}<div style="text-align:center;display:flex;flex-direction:column;gap:4px"><h2 style="font-size:26px">Leggo i dorsi…</h2><p class="muted" style="margin:0;font-size:14px">Di solito 10–30 secondi.</p></div>`;
   } else if (s.phase === 'review') {
-    const inc = s.items.filter(x => x.include).length, todo = s.items.filter(x => !x.id && !x.info).length;
+    const inc = s.items.filter(x => x.include).length, todo = s.items.filter(x => !x.id && !x.info && x.status !== 'looking').length, verify = s.items.filter(x => !x.id && x.info && x.info.src === 'titolo' && x.include).length;
     body = `${pic}<div><div class="k">${s.items.length === 1 ? '1 dorso letto' : s.items.length + ' dorsi letti'}</div><h2 style="font-size:30px;margin-top:2px">Controlla prima di salvare</h2></div>${locBtn('Ripiano fotografato', U.loc)}
-    ${todo ? `<div class="hint">${ic('scan', 18)}<span>${todo === 1 ? '1 libro non è in archivio' : todo + ' libri non sono in archivio'}: scansiona il codice per registrare l'edizione giusta. Quelli non scansionati non vengono salvati.</span></div>` : ''}
+    ${todo ? `<div class="hint">${ic('scan', 18)}<span>${todo === 1 ? '1 libro non trovato' : todo + ' libri non trovati'} né in archivio né online: scansiona il codice per registrarli. Quelli non scansionati non vengono salvati.</span></div>` : ''}${verify ? `<div class="hint">${ic('check', 18)}<span>${verify === 1 ? '1 libro nuovo riconosciuto' : verify + ' libri nuovi riconosciuti'} dal dorso: verranno aggiunti con l'edizione più probabile. Per quella esatta usa «Verifica edizione col codice».</span></div>` : ''}
     ${s.items.length ? `<div style="border-top:1px solid var(--div)">${s.items.map((x, i) => {
       const b = x.id && S.books.find(y => y.id === x.id), d = b || x.info || x;
-      const note = b ? (b.room === U.loc.room && b.shelf === U.loc.shelf && +b.level === +U.loc.level ? 'già qui' : 'in archivio · ora in ' + short(b)) : x.info ? 'nuovo · edizione dal codice' + (x.info.isbn ? ' ' + x.info.isbn : '') : 'non in archivio · tocca per scansionare';
+      const note = b ? (b.room === U.loc.room && b.shelf === U.loc.shelf && +b.level === +U.loc.level ? 'già qui' : 'in archivio · ora in ' + short(b)) : x.info ? (x.info.src === 'titolo' ? 'nuovo · dal dorso' + (x.info.p ? ' · ' + x.info.p : '') + (x.info.y ? ' ' + x.info.y : '') : 'nuovo · edizione dal codice' + (x.info.isbn ? ' ' + x.info.isbn : '')) : x.status === 'looking' ? 'cerco online…' : 'non trovato · tocca per scansionare';
       return `<button class="row" data-a="shotToggle" data-v="${i}" style="grid-template-columns:24px minmax(0,1fr) auto">${!x.id && !x.info ? `<span style="color:var(--a7)">${ic('scan', 22)}</span>` : `<span class="check ${x.include ? 'on' : ''}">${x.include ? ic('check', 14) : ''}</span>`}<div style="min-width:0"><div class="t1">${esc(d.t)}</div><div class="t2">${esc(d.a || '—')} · ${esc(note)}</div></div>${x.conf === 'bassa' ? '<span class="tag n">Incerto</span>' : ''}</button>`;
     }).join('')}</div>` : '<div class="hint">Nessun dorso riconosciuto. Prova più vicino, con più luce e il telefono dritto.</div>'}`;
-    bar = `${todo ? `<button class="btn p bp" data-a="linkStart">${M}${ic('scan')}Scansiona ${todo === 1 ? '1 codice mancante' : todo + ' codici mancanti'}</button>` : ''}<button class="btn ${todo ? '' : 'p bp'}" data-a="saveShot" ${inc ? '' : 'disabled'}>${todo ? '' : M}${inc === 1 ? 'Salva 1 libro' : 'Salva ' + inc + ' libri'} → ${esc(short(U.loc))}</button><button class="btn g" data-a="shotPick">${ic('cam', 18)}Rifai foto</button>`;
+    bar = `${todo ? `<button class="btn p bp" data-a="linkStart">${M}${ic('scan')}Scansiona ${todo === 1 ? '1 codice mancante' : todo + ' codici mancanti'}</button>` : ''}<button class="btn ${todo ? '' : 'p bp'}" data-a="saveShot" ${inc ? '' : 'disabled'}>${todo ? '' : M}${inc === 1 ? 'Salva 1 libro' : 'Salva ' + inc + ' libri'} → ${esc(short(U.loc))}</button>${verify ? `<button class="btn" data-a="linkVerify">${ic('scan', 18)}Verifica edizione col codice (${verify})</button>` : ''}<button class="btn g" data-a="shotPick">${ic('cam', 18)}Rifai foto</button>`;
   } else {
     body = `<div><h2 style="font-size:32px">Fotografa un ripiano</h2><p class="muted" style="margin:4px 0 0;font-size:14px">Un ripiano per foto, inquadrato dritto, con i dorsi leggibili. Dopo la lettura controlli l'elenco: i libri confermati vengono messi qui, nell'ordine della foto.</p></div>${locBtn('Ripiano fotografato', U.loc)}${s.err ? `<div class="hint">${esc(s.err)}</div>` : ''}`;
     bar = `<button class="btn p bp" data-a="shotPick">${M}${ic('cam')}Scatta o scegli foto</button>`;
@@ -578,7 +592,8 @@ const A = {
   shot: () => { U.shot = { phase: 'ready' }; U.loc = { ...S.lastLoc }; go('shot'); },
   shotPick: () => $('#shotFile').click(),
   shotToggle: v => { const x = U.shot.items[+v]; if (!x.id && !x.info) return A.linkStart(v); x.include = !x.include; render(); },
-  linkStart: v => { const i = v !== undefined && v !== '' ? +v : U.shot.items.findIndex(y => !y.id && !y.info); if (i < 0) return; U.linkIdx = i; U.mode = 'link'; U.flash = null; lastCode = ''; go('scanner'); },
+  linkVerify: () => { U.linkAll = true; const i = U.shot.items.findIndex(needScan); if (i < 0) return; U.linkIdx = i; U.mode = 'link'; U.flash = null; lastCode = ''; go('scanner'); },
+  linkStart: v => { U.linkAll = false; const i = v !== undefined && v !== '' ? +v : U.shot.items.findIndex(needScan); if (i < 0) return; U.linkIdx = i; U.mode = 'link'; U.flash = null; lastCode = ''; go('scanner'); },
   linkSkip: () => nextLink(),
   linkDone: () => { U.mode = 'single'; go('shot'); },
   saveShot: () => {
@@ -683,9 +698,19 @@ $('#shotFile').addEventListener('change', async e => {
     const items = libri.map(l => {
       const b = l.id && S.books.find(x => x.id === String(l.id));
       if (b) { if (seen.has(b.id)) return null; seen.add(b.id); }
-      return { id: b ? b.id : null, t: l.titolo || '', a: l.autore || '', conf: l.certezza || 'media', include: !!b, status: b ? 'ok' : 'todo', info: null };
+      return { id: b ? b.id : null, t: l.titolo || '', a: l.autore || '', p: l.editore || '', conf: l.certezza || 'media', include: !!b, status: b ? 'ok' : 'todo', info: null };
     }).filter(x => x && (x.id || x.t));
+    items.forEach(x => { if (!x.id) x.status = 'looking'; });
     U.shot = { phase: 'review', img, items }; render();
+    items.filter(x => !x.id).forEach(async x => {
+      const info = await findByTitle(x.t, x.a, x.p);
+      if (x.info) return;
+      const ex = info && info.isbn && S.books.find(b => b.isbn === info.isbn);
+      if (ex && !items.some(y => y.id === ex.id)) Object.assign(x, { id: ex.id, include: true });
+      else if (info && !ex) Object.assign(x, { info, include: x.conf !== 'bassa' });
+      x.status = 'done';
+      if (U.screen === 'shot' && U.shot && U.shot.items === items) render();
+    });
   } catch (err) {
     U.shot = { phase: 'ready', err: 'Non sono riuscito a leggere la foto: ' + (err.message || err) + '.' }; render();
   }
