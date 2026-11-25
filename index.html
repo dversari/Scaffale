@@ -465,16 +465,20 @@ async function readShelf(img) {
     tools: [{ name: 'dorsi', description: 'Libri visibili nella foto, da sinistra a destra.', input_schema: { type: 'object', required: ['libri'], properties: { libri: { type: 'array', items: { type: 'object', required: ['titolo', 'certezza'], properties: {
       id: { type: ['string', 'null'], description: 'id del catalogo se il libro è nel catalogo, altrimenti null' },
       titolo: { type: 'string' }, autore: { type: 'string' }, certezza: { type: 'string', enum: ['alta', 'media', 'bassa'] } } } } } } }],
-    tool_choice: { type: 'tool', name: 'dorsi' },
+    tool_choice: { type: 'auto' },
     messages: [{ role: 'user', content: [
       { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: img.split(',')[1] } },
-      { type: 'text', text: `Questa è la foto di un ripiano di libreria. Leggi i dorsi nell'ordine in cui compaiono da sinistra a destra (per i libri impilati in orizzontale, dall'alto in basso). Per ogni libro: se corrisponde a uno del catalogo qui sotto, indica il suo id; altrimenti id null, con titolo e autore come li leggi sul dorso. Non inventare: includi un dorso poco leggibile solo se ne leggi almeno parte del titolo, con certezza bassa.\n\nCatalogo (id|titolo|autore):\n${cat || '(vuoto)'}` }] }]
+      { type: 'text', text: `Questa è la foto di un ripiano di libreria. Leggi i dorsi nell'ordine in cui compaiono da sinistra a destra (per i libri impilati in orizzontale, dall'alto in basso). Per ogni libro: se corrisponde a uno del catalogo qui sotto, indica il suo id; altrimenti id null, con titolo e autore come li leggi sul dorso. Non inventare: includi un dorso poco leggibile solo se ne leggi almeno parte del titolo, con certezza bassa. Rispondi solo chiamando lo strumento dorsi.\n\nCatalogo (id|titolo|autore):\n${cat || '(vuoto)'}` }] }]
   };
   const r = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers: { 'content-type': 'application/json', 'x-api-key': getKey(), 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' }, body: JSON.stringify(body) });
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(r.status === 401 ? 'chiave API non valida' : (j.error && j.error.message) || 'errore ' + r.status);
   const tu = (j.content || []).find(c => c.type === 'tool_use');
-  return (tu && tu.input && tu.input.libri) || [];
+  if (tu && tu.input && Array.isArray(tu.input.libri)) return tu.input.libri;
+  const txt = (j.content || []).filter(c => c.type === 'text').map(c => c.text).join('\n');
+  const m = txt.match(/\{[\s\S]*\}/);
+  if (m) { try { const o = JSON.parse(m[0]); if (Array.isArray(o.libri)) return o.libri; } catch (e) {} }
+  throw new Error('risposta non leggibile, riprova');
 }
 let linkBusy = false;
 async function linkCode(d) {
