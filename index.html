@@ -1,0 +1,460 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#f2f0eb">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Scaffale">
+<title>Scaffale</title>
+<link rel="icon" type="image/svg+xml" href="./favicon.svg">
+<link rel="apple-touch-icon" href="./apple-touch-icon.png">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;700&family=Barlow+Condensed:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#f2f0eb;--text:#1d1f20;--div:color-mix(in srgb,#1d1f20 16%,transparent);--a:#67836c;--a1:#f0f7f0;--a2:#dcebdd;--a3:#c0d9c3;--a4:#a1bea5;--a6:#5d7862;--a7:#4e6652;--a8:#374a3a;--a9:#253127;--n4:#b7b7ba;--n6:#7a7a7d;--n7:#5d5d60;--fh:"Barlow Condensed",system-ui,sans-serif;--fb:"Barlow",system-ui,sans-serif;--sat:env(safe-area-inset-top,0px);--sab:env(safe-area-inset-bottom,0px)}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font:16px/1.45 var(--fb);overscroll-behavior:none}
+a{color:var(--a7)}
+button{font:inherit;color:inherit;cursor:pointer}
+:focus{outline:none}:focus-visible{outline:2px solid var(--a);outline-offset:2px}
+::selection{background:color-mix(in srgb,var(--a) 30%,transparent)}
+h1,h2,h3{font-family:var(--fh);font-weight:600;letter-spacing:-.015em;line-height:1.05;margin:0}
+.k{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--a7)}
+.muted{color:var(--n7)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:46px;padding:0 16px;border:1px solid var(--div);border-radius:0;background:transparent;font-family:var(--fh);font-weight:600;font-size:16px;line-height:1.1}
+.btn:hover{background:color-mix(in srgb,var(--text) 6%,transparent)}
+.btn:active{background:color-mix(in srgb,var(--text) 12%,transparent)}
+.btn.p{background:var(--a);border-color:var(--a);color:var(--bg);min-height:52px;font-size:18px}
+.btn.p:hover{background:var(--a6)}.btn.p:active{background:var(--a7)}
+.btn.g{border-color:transparent;color:var(--a7);padding:0 8px}
+.btn.g:hover{background:color-mix(in srgb,var(--a) 10%,transparent)}
+.btn.ic{width:44px;padding:0}
+.btn:disabled{opacity:.45;pointer-events:none}
+.bp{position:relative}
+.bp>i{position:absolute;width:11px;height:11px;color:color-mix(in srgb,var(--text) 55%,transparent);pointer-events:none}
+.bp>i::before,.bp>i::after{content:"";position:absolute;background:currentColor}
+.bp>i::before{left:5px;top:0;width:1px;height:100%}.bp>i::after{top:5px;left:0;height:1px;width:100%}
+.bp>i:nth-of-type(1){top:-6px;left:-6px}.bp>i:nth-of-type(2){top:-6px;right:-6px}.bp>i:nth-of-type(3){bottom:-6px;left:-6px}.bp>i:nth-of-type(4){bottom:-6px;right:-6px}
+.in{width:100%;min-height:46px;padding:8px 12px;font:inherit;font-size:16px;color:var(--text);caret-color:var(--a);background:color-mix(in srgb,var(--text) 4%,transparent);border:1px solid var(--div);border-radius:0}
+.in:hover{border-color:color-mix(in srgb,var(--text) 45%,transparent)}.in:focus{border-color:var(--a)}
+.field label{display:block;font-size:12px;margin-bottom:5px;color:color-mix(in srgb,var(--text) 70%,transparent)}
+.tag{display:inline-flex;align-items:center;font-size:11px;letter-spacing:.02em;padding:3px 9px;background:var(--a1);color:var(--a8);white-space:nowrap}
+.tag.n{background:color-mix(in srgb,var(--text) 7%,transparent);color:var(--n7)}
+.chips{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;margin:0 -20px;padding:0 20px}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:none;min-height:36px;padding:0 14px;border:1px solid var(--div);background:transparent;font-family:var(--fh);font-weight:600;font-size:15px}
+.chip.on{background:var(--a);border-color:var(--a);color:var(--bg)}
+.seg{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;border:1px solid var(--div)}
+.seg button{min-height:34px;border:0;background:transparent;font-size:13px}
+.seg button+button{border-left:1px solid var(--div)}
+.seg button.on{background:var(--text);color:var(--bg)}
+.scr{position:fixed;inset:0;display:flex;flex-direction:column;background:var(--bg)}
+.top{padding:calc(var(--sat) + 14px) 20px 12px;display:flex;flex-direction:column;gap:12px}
+.top.nav{padding:calc(var(--sat) + 6px) 12px 0;flex-direction:row;justify-content:space-between;align-items:center}
+.body{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:4px 20px 28px}
+.bar{padding:14px 20px calc(var(--sab) + 14px);border-top:1px solid var(--div);background:var(--bg);display:grid;gap:10px}
+.row{all:unset;cursor:pointer;display:grid;grid-template-columns:40px minmax(0,1fr) auto;gap:14px;align-items:center;width:100%;box-sizing:border-box;padding:12px 0;border-bottom:1px solid var(--div)}
+.row:active{background:color-mix(in srgb,var(--text) 5%,transparent)}
+.t1{font-family:var(--fh);font-weight:600;font-size:18px;line-height:1.15;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.t2{font-size:13px;color:var(--n7);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.thumb{width:40px;height:56px;border:1px solid var(--div);display:flex;align-items:center;justify-content:center;font-family:var(--fh);font-weight:600;font-size:20px;color:var(--a7);overflow:hidden}
+.thumb img{width:100%;height:100%;object-fit:cover}
+.gh{display:flex;align-items:baseline;justify-content:space-between;gap:8px;padding-bottom:6px;border-bottom:1px solid var(--text)}
+.shelf{display:flex;align-items:flex-end;gap:3px;min-height:160px;padding:0 6px;border-bottom:2px solid var(--text);overflow-x:auto}
+.spine{all:unset;cursor:pointer;box-sizing:border-box;flex:none;border:1px solid var(--div);writing-mode:vertical-rl;transform:rotate(180deg);padding:8px 0;display:flex;align-items:center;justify-content:center;font-family:var(--fh);font-weight:600;font-size:13px;line-height:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.spine.new{border-color:var(--a);background:var(--a1)}
+.loc{all:unset;cursor:pointer;display:grid;grid-template-columns:24px minmax(0,1fr) 20px;gap:12px;align-items:center;padding:14px;border:1px solid var(--a);box-sizing:border-box}
+.loc:active{background:color-mix(in srgb,var(--a) 10%,transparent)}
+.facts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));border-top:1px solid var(--div);border-left:1px solid var(--div)}
+.facts>div{padding:10px 12px;border-right:1px solid var(--div);border-bottom:1px solid var(--div);min-width:0}
+.facts .v{font-size:15px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.cover{width:112px;height:164px;flex:none;display:flex;flex-direction:column;justify-content:space-between;padding:12px 10px}
+.cover img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.check{width:22px;height:22px;border:1px solid var(--n4);display:flex;align-items:center;justify-content:center;color:var(--bg)}
+.check.on{background:var(--a);border-color:var(--a)}
+#cam{position:fixed;inset:0;width:100%;height:100%;object-fit:cover;background:#1d1f20;display:none}
+#cam.on{display:block}
+.dark{background:transparent;color:var(--bg)}
+.dark .shade{position:absolute;inset:0;background:linear-gradient(#1d1f20cc,transparent 22%,transparent 60%,#1d1f20cc);pointer-events:none}
+.dbtn{all:unset;cursor:pointer;min-height:44px;min-width:44px;display:flex;align-items:center;justify-content:center;gap:8px;font-family:var(--fh);font-weight:600;font-size:16px}
+.frame{position:relative;width:min(290px,78vw);height:150px;border:1px solid rgba(242,240,235,.55)}
+.frame>i{color:var(--bg)}
+.line{position:absolute;left:14px;right:14px;height:2px;background:var(--a4);box-shadow:0 0 14px 2px var(--a4);animation:sl 1.4s ease-in-out infinite alternate}
+@keyframes sl{from{top:8%}to{top:88%}}
+@keyframes pop{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.flash{width:min(290px,78vw);padding:12px 14px;border:1px solid var(--a4);background:rgba(37,49,39,.88);display:flex;gap:10px;align-items:center;animation:pop .25s ease-out}
+.tray{background:var(--bg);color:var(--text)}
+#sheet .bd{position:fixed;inset:0;z-index:40;background:color-mix(in srgb,#2b2b2d 50%,transparent)}
+#sheet .sh{position:fixed;left:0;right:0;bottom:0;z-index:41;max-height:88vh;overflow-y:auto;background:var(--bg);padding:20px 20px calc(var(--sab) + 20px);display:flex;flex-direction:column;gap:16px;box-shadow:0 12px 32px color-mix(in srgb,#2b2b2d 22%,transparent);animation:pop .2s ease-out}
+.opts{display:grid;gap:6px}
+.opts .chip{min-height:44px;font-size:16px}
+#toast{position:fixed;left:20px;right:20px;bottom:calc(var(--sab) + 96px);z-index:50;padding:12px 14px;background:var(--a9);color:var(--bg);font-size:14px;display:none;align-items:center;gap:10px;box-shadow:0 3px 10px color-mix(in srgb,#2b2b2d 16%,transparent);animation:pop .25s ease-out}
+#toast.on{display:flex}
+.menu{all:unset;cursor:pointer;display:flex;align-items:center;gap:14px;padding:14px 0;border-bottom:1px solid var(--div);font-size:16px}
+.hint{display:flex;gap:10px;align-items:flex-start;padding:12px 14px;background:var(--a1);color:var(--a8);font-size:14px}
+</style>
+</head>
+<body>
+<video id="cam" playsinline muted autoplay></video>
+<div id="app"></div>
+<div id="sheet"></div>
+<div id="toast"></div>
+<input id="importFile" type="file" accept="application/json,.json" hidden>
+<script src="https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js"></script>
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const M = '<i></i><i></i><i></i><i></i>';
+const I = {
+  scan: '<path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M8 7v10"/><path d="M12 7v10"/><path d="M17 7v10"/>',
+  pen: '<path d="M12 20h9"/><path d="M16.4 3.6a2.1 2.1 0 0 1 3 3L7.4 18.6a2 2 0 0 1-.9.5l-2.9.8a.5.5 0 0 1-.6-.6l.8-2.9a2 2 0 0 1 .5-.9z"/>',
+  search: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
+  more: '<circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>',
+  x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+  back: '<path d="m15 18-6-6 6-6"/>',
+  next: '<path d="m9 18 6-6-6-6"/>',
+  pin: '<path d="M20 10c0 5-5.5 10.2-7.4 11.8a1 1 0 0 1-1.2 0C9.5 20.2 4 15 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/>',
+  trash: '<path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>',
+  check: '<path d="M20 6 9 17l-5-5"/>',
+  down: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/>',
+  up: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/>',
+  plus: '<path d="M5 12h14"/><path d="M12 5v14"/>',
+  share: '<path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><path d="m16 6-4-4-4 4"/><path d="M12 2v13"/>',
+};
+const ic = (n, s = 20) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="flex:none">${I[n]}</svg>`;
+
+const KEY = 'scaffale.v1';
+const SHELVES = ['A', 'B', 'C', 'D', 'E', 'F'];
+const LEVELS = [1, 2, 3, 4, 5, 6];
+const S = Object.assign({ books: [], rooms: ['Soggiorno', 'Studio', 'Camera'], lastLoc: { room: 'Soggiorno', shelf: 'A', level: 1 }, layout: 'posizione', hintOff: false }, JSON.parse(localStorage.getItem(KEY) || '{}'));
+const save = () => localStorage.setItem(KEY, JSON.stringify(S));
+const U = { screen: 'archive', q: '', room: 'Tutti', mode: 'single', queue: [], pending: null, dup: null, cur: null, loc: null, form: null, flash: null, camErr: null, loading: null, sheet: null, draft: null, newRoom: false };
+
+const short = l => `${l.room} · ${l.shelf}${l.level}`;
+const long = l => `${l.room} · Scaffale ${l.shelf} · Ripiano ${l.level}`;
+const initial = t => (t || '?').replace(/^(il |la |le |lo |l'|gli |i |the )/i, '').charAt(0).toUpperCase();
+function norm(raw) {
+  const d = String(raw).toUpperCase().replace(/[^0-9X]/g, '');
+  if (d.length === 10) { const b = '978' + d.slice(0, 9); let s = 0; for (let i = 0; i < 12; i++) s += +b[i] * (i % 2 ? 3 : 1); return b + ((10 - s % 10) % 10); }
+  return d.length === 13 ? d : null;
+}
+const isIsbn = d => !!d && /^97[89]/.test(d);
+
+async function lookup(isbn) {
+  try {
+    const j = await (await fetch(`https://www.googleapis.com/books/v1/volumes?q=isbn:${isbn}`)).json();
+    const v = j.items && j.items[0] && j.items[0].volumeInfo;
+    if (v) return { t: v.title + (v.subtitle ? ': ' + v.subtitle : ''), a: (v.authors || []).join(', '), p: v.publisher || '', y: (v.publishedDate || '').slice(0, 4), pg: v.pageCount || '', cover: ((v.imageLinks && (v.imageLinks.thumbnail || v.imageLinks.smallThumbnail)) || '').replace('http:', 'https:') };
+  } catch (e) {}
+  try {
+    const j = await (await fetch(`https://openlibrary.org/api/books?bibkeys=ISBN:${isbn}&format=json&jscmd=data`)).json();
+    const v = j['ISBN:' + isbn];
+    if (v) return { t: v.title, a: (v.authors || []).map(x => x.name).join(', '), p: (v.publishers && v.publishers[0] && v.publishers[0].name) || '', y: ((v.publish_date || '').match(/\d{4}/) || [''])[0], pg: v.number_of_pages || '', cover: (v.cover && v.cover.medium) || '' };
+  } catch (e) {}
+  return null;
+}
+
+let reader = null, lastCode = '', lastAt = 0, flashT, toastT;
+async function camStart() {
+  U.camErr = null;
+  if (!window.ZXing) { U.camErr = 'Lettore non caricato. Controlla la connessione o digita l\'ISBN.'; return render(); }
+  try {
+    const hints = new Map();
+    hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [ZXing.BarcodeFormat.EAN_13, ZXing.BarcodeFormat.EAN_8, ZXing.BarcodeFormat.UPC_A]);
+    hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+    reader = new ZXing.BrowserMultiFormatReader(hints, 250);
+    $('#cam').classList.add('on');
+    await reader.decodeFromConstraints({ video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } } }, $('#cam'), res => { if (res) onCode(res.getText()); });
+  } catch (e) {
+    camStop();
+    U.camErr = 'Fotocamera non disponibile. Consenti l\'accesso nelle impostazioni o digita l\'ISBN.';
+    if (U.screen === 'scanner') render();
+  }
+}
+function camStop() { try { reader && reader.reset(); } catch (e) {} reader = null; $('#cam').classList.remove('on'); }
+
+function flash(t, note) { clearTimeout(flashT); U.flash = { t, note }; render(); flashT = setTimeout(() => { U.flash = null; if (U.screen === 'scanner') render(); }, 1800); }
+function toast(msg) { clearTimeout(toastT); const el = $('#toast'); el.innerHTML = ic('check', 18) + '<span>' + esc(msg) + '</span>'; el.classList.add('on'); toastT = setTimeout(() => el.classList.remove('on'), 2600); }
+
+async function onCode(raw) {
+  const d = norm(raw);
+  const now = Date.now();
+  if (raw === lastCode && now - lastAt < 3000) return;
+  lastCode = raw; lastAt = now;
+  if (!isIsbn(d)) { flash('Codice non riconosciuto', 'Non è un ISBN: ' + raw); return; }
+  if (navigator.vibrate) navigator.vibrate(40);
+  if (U.mode === 'single') { camStop(); openIsbn(d); } else batchAdd(d);
+}
+async function openIsbn(d) {
+  const ex = S.books.find(b => b.isbn === d);
+  if (ex) { U.pending = { ...ex }; U.dup = ex.id; U.loading = null; return go('result'); }
+  U.loading = d; U.pending = null; U.dup = null; U.loc = { ...S.lastLoc }; go('result');
+  const info = await lookup(d);
+  if (U.loading !== d) return;
+  U.loading = null;
+  if (info) { U.pending = { isbn: d, ...info }; render(); }
+  else { U.form = { t: '', a: '', p: '', y: '', isbn: d }; U.notFound = true; go('manual'); }
+}
+function batchAdd(d) {
+  if (U.queue.some(q => q.isbn === d)) return flash('Già letto in questa serie', d);
+  const ex = S.books.find(b => b.isbn === d);
+  const item = ex ? { ...ex, dup: true, include: false, status: 'ok' } : { isbn: d, t: 'Cerco…', a: '', dup: false, include: true, status: 'loading' };
+  U.queue.push(item);
+  flash(ex ? ex.t : 'ISBN ' + d, ex ? 'Già in archivio · ' + short(ex) : 'Aggiunto alla serie');
+  if (!ex) lookup(d).then(info => {
+    Object.assign(item, info ? { ...info, status: 'ok' } : { t: 'ISBN ' + d, a: 'Dati non trovati: completali dopo', status: 'missing' });
+    if (U.screen === 'scanner' || U.screen === 'batch') render();
+  });
+}
+function addBooks(list, loc) {
+  const now = new Date().toISOString();
+  const added = list.map(b => ({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), isbn: b.isbn || '', t: b.t, a: b.a || '', p: b.p || '', y: b.y || '', pg: b.pg || '', cover: b.cover || '', room: loc.room, shelf: loc.shelf, level: loc.level, added: now }));
+  S.books = [...added, ...S.books]; S.lastLoc = { ...loc }; save();
+  return added;
+}
+const isNew = b => b.added && Date.now() - new Date(b.added).getTime() < 36e5;
+
+function go(screen) {
+  if (U.screen === 'scanner' && screen !== 'scanner') camStop();
+  U.screen = screen; U.sheet = null; renderSheet(); render();
+  if (screen === 'scanner') camStart();
+}
+
+/* ——— views ——— */
+function vArchive() {
+  const rooms = new Set(S.books.map(b => b.room)).size;
+  const ios = /iphone|ipad/i.test(navigator.userAgent) && !navigator.standalone;
+  return `<div class="scr">
+  <div class="top">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+      <div><div class="k">${S.books.length === 1 ? '1 libro' : S.books.length + ' libri'}${rooms ? ' · ' + rooms + (rooms === 1 ? ' stanza' : ' stanze') : ''}</div><h1 style="font-size:38px;margin-top:2px">La mia libreria</h1></div>
+      <button class="btn g ic" data-a="menu" aria-label="Menu" style="color:var(--text)">${ic('more', 22)}</button>
+    </div>
+    ${ios && !S.hintOff ? `<div class="hint">${ic('share', 18)}<span style="flex:1">Per installarla: tocca Condividi, poi «Aggiungi alla schermata Home».</span><button class="dbtn" data-a="hintOff" aria-label="Chiudi" style="min-height:24px;min-width:24px">${ic('x', 16)}</button></div>` : ''}
+    ${S.books.length ? `<div style="position:relative"><span style="position:absolute;left:12px;top:14px;color:var(--n6)">${ic('search', 18)}</span><input id="q" class="in" type="search" placeholder="Cerca titolo, autore o ISBN" value="${esc(U.q)}" style="padding-left:38px"></div>
+    <div class="chips">${['Tutti', ...S.rooms].map(r => `<button class="chip ${U.room === r ? 'on' : ''}" data-a="room" data-v="${esc(r)}">${esc(r)}</button>`).join('')}</div>
+    <div class="seg">${[['elenco', 'Elenco'], ['posizione', 'Posizione'], ['dorsi', 'Dorsi']].map(([k, l]) => `<button class="${S.layout === k ? 'on' : ''}" data-a="layout" data-v="${k}">${l}</button>`).join('')}</div>` : ''}
+  </div>
+  <div class="body" id="list">${vList()}</div>
+  <div class="bar" style="grid-template-columns:auto minmax(0,1fr)">
+    <button class="btn" data-a="manual" style="min-height:52px">${ic('pen', 18)}A mano</button>
+    <button class="btn p bp" data-a="scan">${M}${ic('scan')}Scansiona</button>
+  </div></div>`;
+}
+function vList() {
+  if (!S.books.length) return `<div style="padding:56px 8px;text-align:center;display:flex;flex-direction:column;gap:8px;align-items:center"><h2 style="font-size:26px">L'archivio è vuoto</h2><p class="muted" style="margin:0;max-width:280px;font-size:15px">Scansiona il codice a barre sul retro di un libro. Per i libri senza codice usa «A mano».</p></div>`;
+  const q = U.q.trim().toLowerCase();
+  const f = S.books.filter(b => (U.room === 'Tutti' || b.room === U.room) && (!q || (b.t + ' ' + b.a + ' ' + b.isbn).toLowerCase().includes(q)));
+  if (!f.length) return `<div class="muted" style="padding:48px 0;text-align:center;font-size:15px">Nessun libro trovato.</div>`;
+  if (S.layout === 'elenco') return [...f].sort((x, y) => x.t.localeCompare(y.t, 'it')).map(b => `<button class="row" data-a="open" data-v="${b.id}">
+    <div class="thumb">${b.cover ? `<img src="${esc(b.cover)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : esc(initial(b.t))}</div>
+    <div style="min-width:0"><div class="t1">${esc(b.t)}</div><div class="t2">${esc(b.a)}</div></div>
+    <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px"><span class="tag">${esc(b.room.slice(0, 3).toUpperCase())} · ${b.shelf}${b.level}</span>${isNew(b) ? '<span class="k" style="font-size:10px">Nuovo</span>' : ''}</div></button>`).join('');
+  const g = {};
+  f.forEach(b => { const k = `${String(S.rooms.indexOf(b.room)).padStart(3, '0')}${b.shelf}${b.level}`; (g[k] = g[k] || { room: b.room, sub: `Scaffale ${b.shelf} · Ripiano ${b.level}`, items: [] }).items.push(b); });
+  const groups = Object.keys(g).sort().map(k => g[k]);
+  const head = x => `<div style="display:flex;align-items:baseline;gap:8px;min-width:0"><span style="font-family:var(--fh);font-weight:600;font-size:20px">${esc(x.room)}</span><span class="k" style="font-size:12px;letter-spacing:.06em">${x.sub}</span></div><span class="muted" style="font-size:12px;flex:none">${x.items.length === 1 ? '1 libro' : x.items.length + ' libri'}</span>`;
+  if (S.layout === 'dorsi') return `<div style="display:flex;flex-direction:column;gap:26px;padding-top:6px">${groups.map(x => `<div style="display:flex;flex-direction:column;gap:8px"><div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px">${head(x)}</div>
+    <div class="shelf">${x.items.map(b => { const h = [...b.t].reduce((n, c) => n + c.charCodeAt(0), 0); const pg = +b.pg || 220; const w = Math.max(22, Math.min(58, Math.round(16 + pg / 18))); return `<button class="spine ${isNew(b) ? 'new' : ''}" data-a="open" data-v="${b.id}" title="${esc(b.t)}" style="height:${116 + (h % 5) * 7}px;width:${w}px">${esc(b.t)}</button>`; }).join('')}</div></div>`).join('')}</div>`;
+  return `<div style="display:flex;flex-direction:column;gap:22px">${groups.map(x => `<div><div class="gh">${head(x)}</div>${x.items.map(b => `<button class="row" data-a="open" data-v="${b.id}" style="grid-template-columns:minmax(0,1fr) auto;padding:11px 0">
+    <div style="min-width:0"><div class="t1">${esc(b.t)}</div><div class="t2">${esc(b.a)}${b.y ? ' · ' + esc(b.y) : ''}</div></div>
+    <div style="display:flex;align-items:center;gap:8px;color:var(--n4)">${isNew(b) ? '<span class="tag">Nuovo</span>' : ''}${ic('next', 16)}</div></button>`).join('')}</div>`).join('')}</div>`;
+}
+function vScanner() {
+  const single = U.mode === 'single';
+  return `<div class="scr dark"><div class="shade"></div>
+  <div style="position:relative;padding:calc(var(--sat) + 8px) 12px 0;display:grid;grid-template-columns:44px minmax(0,1fr) 44px;align-items:center">
+    <button class="dbtn" data-a="home" aria-label="Chiudi">${ic('x', 22)}</button>
+    <div style="justify-self:center;display:flex;border:1px solid rgba(242,240,235,.4);background:rgba(29,31,32,.4)">
+      ${[['single', 'Singola'], ['batch', 'Serie']].map(([k, l]) => `<button data-a="mode" data-v="${k}" style="all:unset;cursor:pointer;height:36px;padding:0 16px;font-family:var(--fh);font-weight:600;font-size:15px;${U.mode === k ? 'background:var(--bg);color:var(--text)' : ''}">${l}</button>`).join('')}
+    </div><span></span>
+  </div>
+  <div style="position:relative;flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;padding:0 20px">
+    <div class="frame bp">${M}${U.camErr ? '' : '<div class="line"></div>'}</div>
+    <div style="text-align:center;display:flex;flex-direction:column;gap:4px;max-width:300px">
+      <div style="font-family:var(--fh);font-weight:600;font-size:22px">${U.camErr ? 'Fotocamera non attiva' : single ? 'Inquadra il codice a barre' : 'Lettura in serie'}</div>
+      <div style="font-size:14px;color:rgba(242,240,235,.75)">${esc(U.camErr || (single ? 'Di solito è sul retro, in basso.' : 'Passa un libro dopo l\'altro davanti alla fotocamera.'))}</div>
+    </div>
+    ${U.flash ? `<div class="flash">${ic('check', 18)}<div style="min-width:0"><div class="t1" style="font-size:17px">${esc(U.flash.t)}</div><div style="font-size:12px;color:var(--a3)">${esc(U.flash.note)}</div></div></div>` : ''}
+  </div>
+  ${single ? `<div style="position:relative;padding:0 20px calc(var(--sab) + 20px);display:flex;flex-direction:column;gap:10px">
+    <form data-f="isbn" style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px">
+      <input name="isbn" class="in" inputmode="numeric" placeholder="Oppure digita l'ISBN" style="background:rgba(29,31,32,.55);color:var(--bg);border-color:rgba(242,240,235,.35)">
+      <button class="btn" style="color:var(--bg);border-color:rgba(242,240,235,.35);background:rgba(29,31,32,.55)">Cerca</button>
+    </form>
+    <button class="dbtn" data-a="manual">${ic('pen', 18)}Libro senza codice? Inserisci a mano</button>
+  </div>` : `<div class="tray" style="position:relative;padding:14px 20px calc(var(--sab) + 14px);display:flex;flex-direction:column;gap:10px">
+    <div style="display:flex;justify-content:space-between;align-items:baseline"><span class="k">Letti in questa serie</span><span style="font-family:var(--fh);font-weight:600;font-size:20px">${U.queue.length === 1 ? '1 libro' : U.queue.length + ' libri'}</span></div>
+    <div style="min-height:96px">${U.queue.length ? [...U.queue].reverse().slice(0, 3).map(x => `<div style="display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px solid var(--div);font-size:14px"><span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(x.t)}</span><span class="muted" style="flex:none;font-size:12px">${x.dup ? 'già presente' : x.status === 'loading' ? '…' : x.status === 'missing' ? 'da completare' : esc((x.a || '').split(',')[0].split(' ').slice(-1)[0])}</span></div>`).join('') : '<div class="muted" style="font-size:13px;padding:8px 0">Ogni codice letto finisce qui. Alla fine scegli la posizione per tutti.</div>'}</div>
+    <button class="btn p bp" data-a="batchReview" ${U.queue.length ? '' : 'disabled'}>${M}Fine · rivedi e archivia</button>
+  </div>`}
+  </div>`;
+}
+function locBtn(label, l) {
+  return `<button class="loc" data-a="sheetLoc">${`<span style="color:var(--a7)">${ic('pin', 22)}</span>`}<div><div class="k" style="font-size:10px">${label}</div><div style="font-family:var(--fh);font-weight:600;font-size:18px">${esc(long(l))}</div></div><span style="color:var(--n6)">${ic('next', 18)}</span></button>`;
+}
+function vBook() {
+  const detail = U.screen === 'detail';
+  const b = detail ? S.books.find(x => x.id === U.cur) : U.pending;
+  const top = `<div class="top nav"><button class="btn g" data-a="${detail ? 'home' : 'scan'}" style="font-size:16px">${ic('back')}${detail ? 'Archivio' : 'Scanner'}</button><span class="k muted" style="padding-right:8px;color:var(--n7)">${detail ? 'Scheda' : U.dup ? 'Codice letto' : 'Libro trovato'}</span></div>`;
+  if (!b) return `<div class="scr">${top}<div class="body" style="display:flex;flex-direction:column;gap:10px;align-items:center;justify-content:center;text-align:center"><div class="k">ISBN ${esc(U.loading || '')}</div><h2 style="font-size:28px">Cerco il libro…</h2><p class="muted" style="margin:0;font-size:14px">Google Books, poi Open Library.</p></div></div>`;
+  const dupB = !detail && U.dup ? S.books.find(x => x.id === U.dup) : null;
+  const loc = detail ? b : (U.loc || S.lastLoc);
+  return `<div class="scr">${top}
+  <div class="body" style="display:flex;flex-direction:column;gap:20px;padding-top:14px">
+    ${dupB ? `<div class="hint">${ic('pin', 18)}<span>Già nel tuo archivio: <strong>${esc(long(dupB))}</strong></span></div>` : ''}
+    <div style="display:grid;grid-template-columns:112px minmax(0,1fr);gap:18px;align-items:end">
+      <div class="cover bp">${M}${b.cover ? `<img src="${esc(b.cover)}" alt="" referrerpolicy="no-referrer">` : `<div class="k" style="font-size:9px">${esc(b.a)}</div><div style="font-family:var(--fh);font-weight:600;font-size:17px;line-height:1.05;overflow:hidden">${esc(b.t)}</div><div class="muted" style="font-size:9px;letter-spacing:.1em;text-transform:uppercase">${esc(b.p)}</div>`}</div>
+      <div style="display:flex;flex-direction:column;gap:4px;min-width:0"><h2 style="font-size:30px;line-height:1.02;text-wrap:balance;overflow-wrap:anywhere">${esc(b.t)}</h2><div style="font-size:16px">${esc(b.a)}</div></div>
+    </div>
+    <div class="facts">${[['Editore', b.p], ['Anno', b.y], ['Pagine', b.pg], ['ISBN', b.isbn]].map(([k, v]) => `<div><div class="k muted" style="font-size:10px;color:var(--n7)">${k}</div><div class="v">${esc(v || '—')}</div></div>`).join('')}</div>
+    ${dupB ? '' : locBtn('Posizione', loc)}
+  </div>
+  <div class="bar">${detail ? `<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><button class="btn" data-a="edit">${ic('pen', 18)}Modifica</button><button class="btn" data-a="remove">${ic('trash', 18)}Rimuovi</button></div>`
+    : dupB ? `<button class="btn p bp" data-a="open" data-v="${dupB.id}">${M}Apri la scheda</button><button class="btn" data-a="scan">Scansiona un altro</button>`
+    : `<button class="btn p bp" data-a="saveResult">${M}Aggiungi all'archivio</button><button class="btn" data-a="saveAndScan">Aggiungi e scansiona il prossimo</button>`}</div>
+  </div>`;
+}
+function vForm() {
+  const edit = U.screen === 'edit', f = U.form;
+  const fld = (k, l, ph = '', extra = '') => `<div class="field"><label>${l}</label><input class="in" name="${k}" value="${esc(f[k])}" placeholder="${ph}" ${extra}></div>`;
+  return `<div class="scr"><div class="top nav"><button class="btn g" data-a="${edit ? 'back' : 'home'}" style="font-size:16px">${ic('back')}Annulla</button></div>
+  <form class="body" data-f="book" style="display:flex;flex-direction:column;gap:14px;padding-top:6px">
+    <div><h2 style="font-size:32px">${edit ? 'Modifica libro' : 'Inserisci a mano'}</h2><p class="muted" style="margin:2px 0 0;font-size:14px">${U.notFound && !edit ? 'Non ho trovato questo ISBN online. Completa i dati.' : edit ? 'Correggi i dati del libro.' : 'Per libri senza codice a barre o edizioni datate.'}</p></div>
+    ${fld('t', 'Titolo *', 'Es. Il deserto dei Tartari')}${fld('a', 'Autore *', 'Es. Dino Buzzati')}
+    <div style="display:grid;grid-template-columns:minmax(0,1fr) 96px;gap:10px">${fld('p', 'Editore')}${fld('y', 'Anno', '', 'inputmode="numeric"')}</div>
+    <div style="display:grid;grid-template-columns:minmax(0,1fr) 96px;gap:10px">${fld('isbn', 'ISBN (facoltativo)', '', 'inputmode="numeric"')}${fld('pg', 'Pagine', '', 'inputmode="numeric"')}</div>
+    ${locBtn('Posizione', U.loc)}
+  </form>
+  <div class="bar"><button class="btn p bp" data-a="saveForm" ${f.t.trim() && f.a.trim() ? '' : 'disabled'} id="saveForm">${M}${edit ? 'Salva modifiche' : 'Salva nell\'archivio'}</button></div></div>`;
+}
+function vBatch() {
+  const inc = U.queue.filter(x => x.include).length;
+  return `<div class="scr"><div class="top nav"><button class="btn g" data-a="scanKeep" style="font-size:16px">${ic('back')}Continua a scansionare</button></div>
+  <div class="body" style="display:flex;flex-direction:column;gap:16px;padding-top:6px">
+    <div><div class="k">Serie · ${U.queue.length === 1 ? '1 libro' : U.queue.length + ' libri'}</div><h2 style="font-size:32px;margin-top:2px">Rivedi prima di archiviare</h2></div>
+    ${locBtn('Posizione per tutti', U.loc)}
+    <div style="border-top:1px solid var(--div)">${U.queue.map((x, i) => `<button class="row" data-a="toggle" data-v="${i}" style="grid-template-columns:24px minmax(0,1fr) auto">
+      <span class="check ${x.include ? 'on' : ''}">${x.include ? ic('check', 14) : ''}</span>
+      <div style="min-width:0"><div class="t1">${esc(x.t)}</div><div class="t2">${esc(x.a || '—')} · ${esc(x.isbn)}</div></div>
+      ${x.dup ? '<span class="tag n">Già presente</span>' : x.status === 'missing' ? '<span class="tag n">Da completare</span>' : ''}</button>`).join('')}</div>
+  </div>
+  <div class="bar"><button class="btn p bp" data-a="saveBatch" ${inc ? '' : 'disabled'}>${M}${inc === 1 ? 'Archivia 1 libro' : 'Archivia ' + inc + ' libri'}</button></div></div>`;
+}
+function render() {
+  const s = U.screen;
+  $('#app').innerHTML = s === 'archive' ? vArchive() : s === 'scanner' ? vScanner() : s === 'result' || s === 'detail' ? vBook() : s === 'manual' || s === 'edit' ? vForm() : s === 'batch' ? vBatch() : '';
+}
+function renderSheet() {
+  const el = $('#sheet');
+  if (!U.sheet) { el.innerHTML = ''; return; }
+  if (U.sheet === 'menu') {
+    el.innerHTML = `<div class="bd" data-a="closeSheet"></div><div class="sh"><div style="display:flex;justify-content:space-between;align-items:center"><h3 style="font-size:26px">Archivio</h3><button class="btn g ic" data-a="closeSheet" aria-label="Chiudi" style="color:var(--text)">${ic('x')}</button></div>
+    <div style="border-top:1px solid var(--div)">
+      <button class="menu" data-a="csv">${ic('down')}<span style="flex:1">Esporta in CSV</span><span class="muted" style="font-size:13px">per Excel o Numbers</span></button>
+      <button class="menu" data-a="backup">${ic('down')}<span style="flex:1">Salva un backup</span><span class="muted" style="font-size:13px">file .json</span></button>
+      <button class="menu" data-a="restore">${ic('up')}<span style="flex:1">Ripristina un backup</span></button>
+    </div><p class="muted" style="margin:0;font-size:13px">I libri restano su questo dispositivo. Salva un backup ogni tanto.</p></div>`;
+    return;
+  }
+  const d = U.draft;
+  const opts = (list, cols, key, cur) => `<div class="opts" style="grid-template-columns:repeat(${cols},minmax(0,1fr))">${list.map(v => `<button class="chip ${cur === v ? 'on' : ''}" data-a="pick" data-k="${key}" data-v="${esc(v)}">${esc(v)}</button>`).join('')}</div>`;
+  el.innerHTML = `<div class="bd" data-a="closeSheet"></div><div class="sh">
+    <div style="display:flex;justify-content:space-between;align-items:center"><h3 style="font-size:26px">Dove lo metti?</h3><button class="btn g ic" data-a="closeSheet" aria-label="Chiudi" style="color:var(--text)">${ic('x')}</button></div>
+    <div style="display:flex;flex-direction:column;gap:6px"><div class="k muted" style="color:var(--n7)">Stanza</div>
+      ${opts(S.rooms, 3, 'room', d.room)}
+      ${U.newRoom ? `<form data-f="room" style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px"><input name="room" class="in" placeholder="Es. Corridoio" autofocus><button class="btn">Aggiungi</button></form>` : `<button class="btn g" data-a="newRoom" style="justify-self:start">${ic('plus', 18)}Nuova stanza</button>`}
+    </div>
+    <div style="display:flex;flex-direction:column;gap:6px"><div class="k muted" style="color:var(--n7)">Scaffale</div>${opts(SHELVES, 6, 'shelf', d.shelf)}</div>
+    <div style="display:flex;flex-direction:column;gap:6px"><div class="k muted" style="color:var(--n7)">Ripiano</div>${opts(LEVELS.map(String), 6, 'level', String(d.level))}</div>
+    <button class="btn p bp" data-a="confirmLoc" style="margin-top:4px">${M}Conferma · ${esc(short(d))}</button></div>`;
+  const ri = el.querySelector('input[name=room]'); if (ri) ri.focus();
+}
+function download(text, name, type) {
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], { type })); a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+const stamp = () => new Date().toISOString().slice(0, 10);
+
+/* ——— actions ——— */
+const A = {
+  home: () => go('archive'),
+  scan: () => { U.queue = []; U.flash = null; lastCode = ''; go('scanner'); },
+  scanKeep: () => go('scanner'),
+  manual: () => { U.form = { t: '', a: '', p: '', y: '', isbn: '', pg: '' }; U.loc = { ...S.lastLoc }; U.notFound = false; go('manual'); },
+  menu: () => { U.sheet = 'menu'; renderSheet(); },
+  hintOff: () => { S.hintOff = true; save(); render(); },
+  room: v => { U.room = v; render(); },
+  layout: v => { S.layout = v; save(); render(); },
+  open: v => { U.cur = v; go('detail'); },
+  mode: v => { U.mode = v; U.queue = []; U.flash = null; render(); },
+  batchReview: () => { U.loc = { ...S.lastLoc }; go('batch'); },
+  toggle: v => { const x = U.queue[+v]; x.include = !x.include; render(); },
+  saveResult: () => { const [b] = addBooks([U.pending], U.loc); go('archive'); toast(`${b.t} → ${short(U.loc)}`); },
+  saveAndScan: () => { const [b] = addBooks([U.pending], U.loc); lastCode = ''; go('scanner'); flash(b.t, 'Archiviato · ' + short(U.loc)); },
+  saveBatch: () => { const inc = U.queue.filter(x => x.include); addBooks(inc, U.loc); U.queue = []; go('archive'); toast(`${inc.length} ${inc.length === 1 ? 'libro aggiunto' : 'libri aggiunti'} → ${short(U.loc)}`); },
+  edit: () => { const b = S.books.find(x => x.id === U.cur); U.form = { t: b.t, a: b.a, p: b.p, y: b.y, isbn: b.isbn, pg: b.pg }; U.loc = { room: b.room, shelf: b.shelf, level: b.level }; go('edit'); },
+  back: () => go('detail'),
+  remove: () => { const b = S.books.find(x => x.id === U.cur); if (!confirm(`Rimuovere «${b.t}» dall'archivio?`)) return; S.books = S.books.filter(x => x.id !== b.id); save(); go('archive'); toast('Rimosso: ' + b.t); },
+  saveForm: () => {
+    const f = U.form, clean = { t: f.t.trim(), a: f.a.trim(), p: f.p.trim(), y: f.y.trim(), pg: String(f.pg || '').trim(), isbn: norm(f.isbn) || f.isbn.replace(/\D/g, '') };
+    if (U.screen === 'edit') { const b = S.books.find(x => x.id === U.cur); Object.assign(b, clean, U.loc); S.lastLoc = { ...U.loc }; save(); go('detail'); toast('Modifiche salvate'); }
+    else { const [b] = addBooks([clean], U.loc); go('archive'); toast(`${b.t} → ${short(U.loc)}`); }
+  },
+  sheetLoc: () => { const det = U.screen === 'detail' ? S.books.find(x => x.id === U.cur) : null; U.draft = det ? { room: det.room, shelf: det.shelf, level: det.level } : { ...(U.loc || S.lastLoc) }; U.newRoom = false; U.sheet = 'loc'; renderSheet(); },
+  closeSheet: () => { U.sheet = null; renderSheet(); },
+  pick: (v, el) => { const k = el.dataset.k; U.draft[k] = k === 'level' ? +v : v; renderSheet(); },
+  newRoom: () => { U.newRoom = true; renderSheet(); },
+  confirmLoc: () => {
+    const l = { ...U.draft };
+    if (U.screen === 'detail') { const b = S.books.find(x => x.id === U.cur); Object.assign(b, l); S.lastLoc = l; save(); toast('Spostato in ' + short(l)); }
+    else U.loc = l;
+    U.sheet = null; renderSheet(); render();
+  },
+  csv: () => {
+    const h = ['Titolo', 'Autore', 'Editore', 'Anno', 'Pagine', 'ISBN', 'Stanza', 'Scaffale', 'Ripiano', 'Aggiunto il'];
+    const rows = S.books.map(b => [b.t, b.a, b.p, b.y, b.pg, b.isbn, b.room, b.shelf, b.level, (b.added || '').slice(0, 10)]);
+    download('\ufeff' + [h, ...rows].map(r => r.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(';')).join('\r\n'), `scaffale-${stamp()}.csv`, 'text/csv;charset=utf-8');
+  },
+  backup: () => download(JSON.stringify({ app: 'scaffale', v: 1, books: S.books, rooms: S.rooms }, null, 1), `scaffale-backup-${stamp()}.json`, 'application/json'),
+  restore: () => $('#importFile').click(),
+};
+
+document.addEventListener('click', e => {
+  const el = e.target.closest('[data-a]');
+  if (!el || el.disabled) return;
+  e.preventDefault();
+  A[el.dataset.a] && A[el.dataset.a](el.dataset.v, el);
+});
+document.addEventListener('input', e => {
+  if (e.target.id === 'q') { U.q = e.target.value; $('#list').innerHTML = vList(); return; }
+  const form = e.target.closest('form[data-f=book]');
+  if (form && U.form) { U.form[e.target.name] = e.target.value; $('#saveForm').disabled = !(U.form.t.trim() && U.form.a.trim()); }
+});
+document.addEventListener('submit', e => {
+  e.preventDefault();
+  const f = e.target.dataset.f;
+  if (f === 'isbn') { const d = norm(e.target.isbn.value); if (!isIsbn(d)) return flash('ISBN non valido', 'Servono 10 o 13 cifre'); camStop(); openIsbn(d); }
+  if (f === 'room') { const r = e.target.room.value.trim(); if (r && !S.rooms.includes(r)) { S.rooms.push(r); save(); } if (r) U.draft.room = r; U.newRoom = false; renderSheet(); }
+});
+$('#importFile').addEventListener('change', async e => {
+  const file = e.target.files[0]; e.target.value = '';
+  if (!file) return;
+  try {
+    const j = JSON.parse(await file.text());
+    if (!Array.isArray(j.books)) throw 0;
+    if (!confirm(`Sostituire l'archivio attuale con ${j.books.length} libri dal backup?`)) return;
+    S.books = j.books; if (Array.isArray(j.rooms)) S.rooms = j.rooms; save();
+    U.sheet = null; renderSheet(); render(); toast(`${j.books.length} libri ripristinati`);
+  } catch (err) { alert('File di backup non valido.'); }
+});
+document.addEventListener('visibilitychange', () => { if (document.hidden) camStop(); else if (U.screen === 'scanner') camStart(); });
+
+render();
+if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('./sw.js').catch(() => {});
+</script>
+</body>
+</html>
