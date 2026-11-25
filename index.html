@@ -109,7 +109,7 @@ h1,h2,h3{font-family:var(--fh);font-weight:600;letter-spacing:-.015em;line-heigh
 <input id="importFile" type="file" accept="application/json,.json" hidden>
 <input id="shotFile" type="file" accept="image/*" hidden>
 <input id="isbnFile" type="file" accept="image/*" hidden>
-<script src="https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/zxing-wasm@2.2.4/dist/iife/reader/index.js"></script>
 <script>
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -168,23 +168,40 @@ async function lookup(isbn) {
 }
 
 let reader = null, lastCode = '', lastAt = 0, flashT, toastT;
+let stream = null, loopT = null, busy = false;
 async function camStart() {
   U.camErr = null;
-  if (!window.ZXing) { U.camErr = 'Lettore non caricato. Controlla la connessione o digita l\'ISBN.'; return render(); }
+  if (stream) return;
+  const det = 'BarcodeDetector' in window ? new BarcodeDetector({ formats: ['ean_13', 'ean_8', 'upc_a'] }) : null;
+  if (!det && !window.ZXingWASM) { U.camErr = 'Lettore non caricato. Controlla la connessione o digita l\'ISBN.'; return render(); }
   try {
-    const hints = new Map();
-    hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [ZXing.BarcodeFormat.EAN_13, ZXing.BarcodeFormat.EAN_8, ZXing.BarcodeFormat.UPC_A]);
-    hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
-    reader = new ZXing.BrowserMultiFormatReader(hints, 250);
-    $('#cam').classList.add('on');
-    await reader.decodeFromConstraints({ video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } } }, $('#cam'), res => { if (res) onCode(res.getText()); });
+    stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } } });
+    reader = stream;
+    const v = $('#cam'); v.srcObject = stream; v.classList.add('on'); await v.play().catch(() => {});
+    const c = document.createElement('canvas'), x = c.getContext('2d', { willReadFrequently: true });
+    const tick = async () => {
+      if (!stream) return;
+      if (!busy && v.videoWidth) {
+        busy = true;
+        try {
+          const W = v.videoWidth, H = v.videoHeight, cw = Math.round(W * 0.92), ch = Math.round(H * (W < H ? 0.42 : 0.7));
+          c.width = cw; c.height = ch; x.drawImage(v, (W - cw) / 2, (H - ch) / 2, cw, ch, 0, 0, cw, ch);
+          let txt = null;
+          if (det) { const r = await det.detect(c); if (r[0]) txt = r[0].rawValue; }
+          else { const r = await ZXingWASM.readBarcodes(x.getImageData(0, 0, cw, ch), { formats: ['EAN-13', 'EAN-8', 'UPC-A'], tryHarder: true, maxNumberOfSymbols: 1 }); if (r[0] && r[0].isValid) txt = r[0].text; }
+          if (txt && stream) onCode(txt);
+        } catch (e) {} finally { busy = false; }
+      }
+      if (stream) loopT = setTimeout(tick, 120);
+    };
+    tick();
   } catch (e) {
     camStop();
     U.camErr = 'Fotocamera non disponibile. Consenti l\'accesso nelle impostazioni o digita l\'ISBN.';
     if (U.screen === 'scanner') render();
   }
 }
-function camStop() { try { reader && reader.reset(); } catch (e) {} reader = null; $('#cam').classList.remove('on'); }
+function camStop() { clearTimeout(loopT); loopT = null; try { stream && stream.getTracks().forEach(t => t.stop()); } catch (e) {} stream = null; reader = null; const v = $('#cam'); v.srcObject = null; v.classList.remove('on'); }
 
 function flash(t, note) { clearTimeout(flashT); U.flash = { t, note }; render(); flashT = setTimeout(() => { U.flash = null; if (U.screen === 'scanner') render(); }, 1800); }
 function toast(msg) { clearTimeout(toastT); const el = $('#toast'); el.innerHTML = ic('check', 18) + '<span>' + esc(msg) + '</span>'; el.classList.add('on'); toastT = setTimeout(() => el.classList.remove('on'), 2600); }
