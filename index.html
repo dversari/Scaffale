@@ -110,6 +110,7 @@ h1,h2,h3{font-family:var(--fh);font-weight:600;letter-spacing:-.015em;line-heigh
 <input id="shotFile" type="file" accept="image/*" hidden>
 <input id="isbnFile" type="file" accept="image/*" hidden>
 <input id="coverFile" type="file" accept="image/*" hidden>
+<input id="setCoverFile" type="file" accept="image/*" hidden>
 <script src="https://cdn.jsdelivr.net/npm/zxing-wasm@2.2.4/dist/iife/reader/index.js"></script>
 <script>
 const $ = s => document.querySelector(s);
@@ -141,7 +142,8 @@ const vanoOf = l => { const m = l && MAPS[l.room]; if (!m) return null; return m
 const vname = l => { const v = vanoOf(l); return v ? v.n : `${l.level}${l.shelf || ''}`; };
 const LEVELS = [1, 2, 3, 4, 5, 6];
 const S = Object.assign({ books: [], rooms: ['Soggiorno', 'Studio', 'Camera'], lastLoc: { room: 'Soggiorno', shelf: 'A', level: 1 }, layout: 'posizione', hintOff: false }, JSON.parse(localStorage.getItem(KEY) || '{}'));
-const save = () => localStorage.setItem(KEY, JSON.stringify(S));
+let quotaWarned = false;
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { if (!quotaWarned) { quotaWarned = true; setTimeout(() => toast('Memoria del telefono piena per l\'app: salva un backup e togli qualche foto di copertina'), 0); } } };
 const U = { screen: 'archive', q: '', room: 'Tutti', mode: 'single', queue: [], pending: null, dup: null, cur: null, loc: null, form: null, flash: null, camErr: null, loading: null, sheet: null, draft: null, newRoom: false };
 
 const short = l => MAPS[l.room] ? `${l.room} · ${vname(l)}` : `${l.room} · ${l.shelf}${l.level}`;
@@ -257,7 +259,7 @@ function batchAdd(d) {
 }
 function addBooks(list, loc) {
   const now = new Date().toISOString();
-  const added = list.map(b => ({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), isbn: b.isbn || '', t: b.t, a: b.a || '', p: b.p || '', y: b.y || '', pg: b.pg || '', cover: b.cover || '', ...(b.dim !== undefined ? { dim: b.dim } : {}), room: loc.room, shelf: loc.shelf, level: loc.level, added: now }));
+  const added = list.map(b => ({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), isbn: b.isbn || '', t: b.t, a: b.a || '', p: b.p || '', y: b.y || '', pg: b.pg || '', cover: b.cover || '', ...(b.dim !== undefined ? { dim: b.dim } : {}), ...(isHex(b.col) && b.colSrc ? { col: b.col, colSrc: b.colSrc } : {}), room: loc.room, shelf: loc.shelf, level: loc.level, added: now }));
   S.books = [...added, ...S.books]; S.lastLoc = { ...loc }; save(); enrich();
   return added;
 }
@@ -325,7 +327,7 @@ async function enrich() {
       }
       const ol = b.isbn && `https://covers.openlibrary.org/b/isbn/${b.isbn}-M.jpg?default=false`, px = u => u && !u.startsWith('data:') ? `https://wsrv.nl/?url=${encodeURIComponent(u)}&w=96&h=96&fit=inside&output=jpg` : null;
       const srcs = [b.cover, px(b.cover), ol, px(ol)].filter(Boolean);
-      for (const s of srcs) { const c = await dominant(s); if (c) { b.col = c; break; } }
+      if (b.colSrc !== 'foto') for (const s of srcs) { const c = await dominant(s); if (c) { b.col = c; break; } }
       b.sp = 1; save();
       if (U.screen === 'archive' && S.layout === 'dorsi') $('#list').innerHTML = vList();
       await new Promise(r => setTimeout(r, getGKey() ? 300 : 1500));
@@ -522,6 +524,7 @@ function vBook() {
       ${b.syn ? `<details${String(b.syn).length < 420 ? ' open' : ''}><summary style="cursor:pointer;font-family:var(--fh);font-weight:600;font-size:18px">Sinossi</summary><p style="margin:8px 0 4px;font-size:15px;white-space:pre-line">${esc(b.syn)}</p>${b.synSrc ? `<div class="muted" style="font-size:12px">Fonte: ${esc(b.synSrc)}</div>` : ''}</details>` : ''}
     </div>` : (detail && !b.mx ? `<div class="muted" style="font-size:13px">Genere, parole chiave e sinossi in arrivo…</div>` : '')}
     ${dupB ? '' : locBtn('Posizione', loc)}
+    ${detail ? `<button class="btn" data-a="setCover" data-v="${b.id}">${ic('cam', 18)}${b.cover ? 'Sostituisci la copertina con una foto' : 'Aggiungi la copertina con una foto'}</button>` : ''}
   </div>
   <div class="bar">${detail ? `<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><button class="btn" data-a="edit">${ic('pen', 18)}Modifica</button><button class="btn" data-a="remove">${ic('trash', 18)}Rimuovi</button></div>`
     : dupB ? `<button class="btn p bp" data-a="open" data-v="${dupB.id}">${M}Apri la scheda</button><button class="btn" data-a="scan">Scansiona un altro</button>`
@@ -660,6 +663,16 @@ function vShot() {
   return `<div class="scr">${top}<div class="body" style="display:flex;flex-direction:column;gap:16px;padding-top:6px">${body}</div>${bar ? `<div class="bar">${bar}</div>` : ''}</div>`;
 }
 
+/* ——— libri senza copertina ——— */
+function vNoCover() {
+  const list = S.books.filter(b => !b.cover).sort((x, y) => x.t.localeCompare(y.t, 'it'));
+  return `<div class="scr"><div class="top nav"><button class="btn g" data-a="home" style="font-size:16px">${ic('back')}Archivio</button><span class="k" style="padding-right:8px;color:var(--n7)">Senza copertina</span></div>
+  <div class="body" style="display:flex;flex-direction:column;gap:14px;padding-top:6px">
+    <div><h2 style="font-size:32px">${list.length ? (list.length === 1 ? '1 libro senza copertina' : list.length + ' libri senza copertina') : 'Tutti i libri hanno la copertina'}</h2>${list.length ? '<p class="muted" style="margin:4px 0 0;font-size:14px">Tocca la fotocamera e fotografa la copertina: diventa l\'immagine del libro e il suo dorso ne prende il colore.</p>' : ''}</div>
+    <div>${list.map(b => `<div class="row" style="grid-template-columns:40px minmax(0,1fr) 44px;cursor:default"><div class="thumb">${esc(initial(b.t))}</div><button data-a="open" data-v="${b.id}" style="all:unset;cursor:pointer;min-width:0"><div class="t1">${esc(b.t)}</div><div class="t2">${esc(b.a || '—')} · ${esc(short(b))}</div></button><button class="btn g ic" data-a="setCover" data-v="${b.id}" aria-label="Fotografa la copertina di ${esc(b.t)}">${ic('cam', 22)}</button></div>`).join('')}</div>
+  </div></div>`;
+}
+
 /* ——— duplicati ——— */
 const nrm = t => String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9 ]+/g, ' ').replace(/\b(il|lo|la|i|gli|le|l|un|una|uno|the|a)\b/g, ' ').replace(/\s+/g, ' ').trim();
 function dupGroups() {
@@ -684,7 +697,7 @@ function vDups() {
 
 function render() {
   const s = U.screen;
-  $('#app').innerHTML = s === 'archive' ? vArchive() : s === 'scanner' ? vScanner() : s === 'result' || s === 'detail' ? vBook() : s === 'manual' || s === 'edit' ? vForm() : s === 'batch' ? vBatch() : s === 'shot' ? vShot() : s === 'dups' ? vDups() : '';
+  $('#app').innerHTML = s === 'archive' ? vArchive() : s === 'scanner' ? vScanner() : s === 'result' || s === 'detail' ? vBook() : s === 'manual' || s === 'edit' ? vForm() : s === 'batch' ? vBatch() : s === 'shot' ? vShot() : s === 'dups' ? vDups() : s === 'nocover' ? vNoCover() : '';
 }
 function renderSheet() {
   const el = $('#sheet');
@@ -711,6 +724,7 @@ function renderSheet() {
     <div style="border-top:1px solid var(--div)">
       <div class="menu" style="cursor:default">${ic('check')}<span style="flex:1">Schede con sinossi e genere</span><span class="muted" style="font-size:13px">${S.books.filter(b => b.mx).length}/${S.books.length}${metaRun ? ' · in corso' : ''}</span></div>
       ${S.books.some(b => b.mx && !b.syn) ? `<button class="menu" data-a="metaRetry">${ic('search')}<span style="flex:1">Riprova i libri senza sinossi</span><span class="muted" style="font-size:13px">${S.books.filter(b => b.mx && !b.syn).length}</span></button>` : ''}
+      <button class="menu" data-a="nocover">${ic('cam')}<span style="flex:1">Libri senza copertina</span><span class="muted" style="font-size:13px">${S.books.filter(b => !b.cover).length}</span></button>
       <button class="menu" data-a="dups">${ic('search')}<span style="flex:1">Cerca duplicati</span><span class="muted" style="font-size:13px">${(n => n ? (n === 1 ? '1 gruppo' : n + ' gruppi') : 'nessuno')(dupGroups().length)}</span></button>
       <button class="menu" data-a="csv">${ic('down')}<span style="flex:1">Esporta in CSV</span><span class="muted" style="font-size:13px">per Excel o Numbers</span></button>
       <button class="menu" data-a="backup">${ic('down')}<span style="flex:1">Salva un backup</span><span class="muted" style="font-size:13px">file .json</span></button>
@@ -800,6 +814,8 @@ const A = {
     U.sheet = null; renderSheet(); render();
   },
   metaRetry: () => { S.books.forEach(b => { if (b.mx && !b.syn) delete b.mx; }); save(); enrichMeta(); renderSheet(); toast('Riprovo a cercare le schede mancanti'); },
+  nocover: () => go('nocover'),
+  setCover: v => { U.coverFor = v; $('#setCoverFile').click(); },
   dups: () => { U.dupSel = new Set(); go('dups'); },
   dupToggle: v => { const s = U.dupSel; s.has(v) ? s.delete(v) : s.add(v); render(); },
   dupKeepFirst: v => { const g = dupGroups()[+v]; if (!g) return; g.items.forEach((b, i) => i ? U.dupSel.add(b.id) : U.dupSel.delete(b.id)); render(); },
@@ -874,10 +890,10 @@ async function readIsbn(img) {
 async function thumb(file) {
   const url = URL.createObjectURL(file), im = new Image();
   await new Promise((r, j) => { im.onload = r; im.onerror = j; im.src = url; });
-  const k = Math.min(1, 260 / Math.max(im.naturalWidth, im.naturalHeight)), c = document.createElement('canvas');
+  const k = Math.min(1, 200 / Math.max(im.naturalWidth, im.naturalHeight)), c = document.createElement('canvas');
   c.width = Math.round(im.naturalWidth * k); c.height = Math.round(im.naturalHeight * k);
   c.getContext('2d').drawImage(im, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
-  return c.toDataURL('image/jpeg', 0.7);
+  return c.toDataURL('image/jpeg', 0.65);
 }
 async function readCover(img) {
   const r = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers: { 'content-type': 'application/json', 'x-api-key': getKey(), 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' }, body: JSON.stringify({
@@ -893,6 +909,16 @@ async function readCover(img) {
   if (m) { try { const o = JSON.parse(m[0]); if (o.titolo) return o; } catch (e) {} }
   throw new Error('non riesco a leggere il titolo dalla foto');
 }
+$('#setCoverFile').addEventListener('change', async e => {
+  const file = e.target.files[0]; e.target.value = '';
+  const b = S.books.find(x => x.id === U.coverFor);
+  if (!file || !b) return;
+  try {
+    const th = await thumb(file), col = await dominant(th);
+    b.cover = th; if (col) { b.col = col; b.colSrc = 'foto'; }
+    save(); render(); toast('Copertina aggiunta: ' + b.t);
+  } catch (err) { toast('Non riesco a leggere la foto'); }
+});
 $('#coverFile').addEventListener('change', async e => {
   const file = e.target.files[0]; e.target.value = '';
   if (!file) return;
@@ -906,7 +932,7 @@ $('#coverFile').addEventListener('change', async e => {
     const t = c.titolo + (c.sottotitolo ? ': ' + c.sottotitolo : '');
     say(c.titolo, 'Cerco l\'edizione…');
     const g = await findByTitle(c.titolo, c.autore || '', c.editore || '');
-    const info = { t: g ? g.t : t, a: (g && g.a) || c.autore || '', p: c.editore || (g && g.p) || '', y: c.anno || (g && g.y) || '', pg: (g && g.pg) || '', cover: (g && g.cover) || th, isbn: (g && g.isbn) || '', dim: (g && g.dim) || null, src: 'copertina' };
+    const info = { t: g ? g.t : t, a: (g && g.a) || c.autore || '', p: c.editore || (g && g.p) || '', y: c.anno || (g && g.y) || '', pg: (g && g.pg) || '', cover: th, isbn: (g && g.isbn) || '', dim: (g && g.dim) || null, src: 'copertina', col: await dominant(th), colSrc: 'foto' };
     if (U.screen === 'scanner' && U.mode === 'link') {
       const x = U.shot && U.shot.items[U.linkIdx];
       const ex = info.isbn && S.books.find(b => b.isbn === info.isbn);
