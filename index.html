@@ -324,6 +324,63 @@ async function enrich() {
       await new Promise(r => setTimeout(r, 1500));
     }
   } finally { enriching = false; }
+  enrichMeta();
+}
+const strip = h => { const d = document.createElement('div'); d.innerHTML = String(h || '').replace(/<br\s*\/?>/gi, '\n').replace(/<\/p>/gi, '\n'); return (d.textContent || '').replace(/\n{3,}/g, '\n\n').trim(); };
+async function fetchMeta(b) {
+  const m = { syn: '', gen: '', kw: [], src: '' };
+  let v = null;
+  if (b.isbn) { const j = await gbFetch(`q=isbn:${b.isbn}`); v = j.items && j.items[0] && j.items[0].volumeInfo; }
+  if (!v || !v.description) {
+    const sur = b.a ? String(b.a).split(',')[0].trim().split(' ').slice(-1)[0] : '';
+    const j = await gbFetch('maxResults=8&q=' + encodeURIComponent(`intitle:"${String(b.t).split(':')[0].replace(/"/g, '')}"` + (sur ? ` inauthor:${sur}` : '')));
+    const w = (j.items || []).map(x => x.volumeInfo).find(x => x && x.description && (!x.language || x.language === 'it')) || (j.items || []).map(x => x.volumeInfo).find(x => x && x.description);
+    if (w) v = v ? { ...v, description: w.description, categories: v.categories || w.categories } : w;
+  }
+  if (v) { if (v.description) { m.syn = strip(v.description); m.src = 'Google Books'; } if (v.categories) m.gen = v.categories.join(', '); }
+  try {
+    const q = b.isbn ? `isbn=${b.isbn}` : `title=${encodeURIComponent(b.t)}&author=${encodeURIComponent(b.a || '')}`;
+    const d = ((await (await fetch(`https://openlibrary.org/search.json?${q}&fields=subject&limit=1`)).json()).docs || [])[0];
+    if (d && d.subject) m.kw = d.subject.slice(0, 15);
+  } catch (e) {}
+  if (getKey()) {
+    try {
+      const r = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers: { 'content-type': 'application/json', 'x-api-key': getKey(), 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' }, body: JSON.stringify({
+        model: 'claude-haiku-5-5', max_tokens: 900, tool_choice: { type: 'auto' },
+        tools: [{ name: 'scheda', description: 'Scheda del libro in italiano.', input_schema: { type: 'object', required: ['genere', 'parole_chiave', 'sinossi'], properties: {
+          genere: { type: 'string', description: '1-3 parole, es. Giallo, Narrativa storica, Saggio di storia dell\'arte, Guida di viaggio' },
+          parole_chiave: { type: 'array', items: { type: 'string' }, description: '5-8 parole chiave in italiano, minuscole' },
+          sinossi: { type: 'string', description: '3-5 frasi in italiano. Vuota se non hai una fonte e non conosci il libro con certezza.' },
+          sinossi_da_conoscenza: { type: 'boolean', description: 'true se la sinossi non viene dalla descrizione fornita ma da ciò che sai del libro' } } } }],
+        messages: [{ role: 'user', content: `Libro: «${b.t}»${b.a ? ' di ' + b.a : ''}${b.p ? ', ' + b.p : ''}${b.y ? ', ' + b.y : ''}.\nDescrizione dell'editore: ${m.syn ? m.syn.slice(0, 3000) : '(nessuna)'}\nCategorie: ${m.gen || '(nessuna)'}\nSoggetti: ${m.kw.join('; ') || '(nessuno)'}\n\nCompila la scheda in italiano. Se c'è la descrizione, la sinossi ne è un riassunto fedele (senza spoiler). Se non c'è, scrivila solo se conosci con certezza questo libro, altrimenti lasciala vuota. Non inventare. Rispondi solo chiamando lo strumento scheda.` }] }) });
+      const j = await r.json().catch(() => ({}));
+      const tu = r.ok && (j.content || []).find(c => c.type === 'tool_use');
+      if (tu && tu.input) {
+        const o = tu.input;
+        if (o.genere) m.gen = o.genere;
+        if (Array.isArray(o.parole_chiave) && o.parole_chiave.length) m.kw = o.parole_chiave.slice(0, 10);
+        if (o.sinossi) { m.syn = o.sinossi; m.src = m.src ? m.src + ', riassunta da Claude' : (o.sinossi_da_conoscenza ? 'Claude, senza fonte online: da verificare' : 'Claude'); }
+      }
+    } catch (e) {}
+  }
+  return m;
+}
+let metaRun = false;
+async function enrichMeta() {
+  if (metaRun || enriching) return; metaRun = true;
+  try {
+    for (;;) {
+      if (!navigator.onLine || Date.now() < gbPause) break;
+      const b = S.books.find(x => !x.mx);
+      if (!b) break;
+      try { const m = await fetchMeta(b); Object.assign(b, { syn: m.syn, gen: m.gen, kw: m.kw, synSrc: m.src, mx: 1 }); }
+      catch (e) { if (Date.now() < gbPause) break; b.mx = 1; }
+      save();
+      if (U.screen === 'detail' && U.cur === b.id) render();
+      if (U.sheet === 'menu') renderSheet();
+      await new Promise(r => setTimeout(r, 1500));
+    }
+  } finally { metaRun = false; }
 }
 
 function go(screen) {
@@ -370,7 +427,7 @@ function vArchive() {
       <button class="btn g ic" data-a="menu" aria-label="Menu" style="color:var(--text)">${ic('more', 22)}</button>
     </div>
     ${ios && !S.hintOff ? `<div class="hint">${ic('share', 18)}<span style="flex:1">Per installarla: tocca Condividi, poi «Aggiungi alla schermata Home».</span><button class="dbtn" data-a="hintOff" aria-label="Chiudi" style="min-height:24px;min-width:24px">${ic('x', 16)}</button></div>` : ''}
-    ${S.books.length ? `<div style="position:relative"><span style="position:absolute;left:12px;top:14px;color:var(--n6)">${ic('search', 18)}</span><input id="q" class="in" type="search" placeholder="Cerca titolo, autore o ISBN" value="${esc(U.q)}" style="padding-left:38px"></div>
+    ${S.books.length ? `<div style="position:relative"><span style="position:absolute;left:12px;top:14px;color:var(--n6)">${ic('search', 18)}</span><input id="q" class="in" type="search" placeholder="Cerca titolo, autore, ISBN, genere o parola chiave" value="${esc(U.q)}" style="padding-left:38px"></div>
     <div class="chips">${['Tutti', ...S.rooms].map(r => `<button class="chip ${U.room === r ? 'on' : ''}" data-a="room" data-v="${esc(r)}">${esc(r)}</button>`).join('')}</div>
     <div class="seg">${[['elenco', 'Elenco'], ['posizione', 'Posizione'], ['dorsi', 'Dorsi']].map(([k, l]) => `<button class="${S.layout === k ? 'on' : ''}" data-a="layout" data-v="${k}">${l}</button>`).join('')}</div>` : ''}
   </div>
@@ -384,7 +441,7 @@ function vArchive() {
 function vList() {
   if (!S.books.length) return `<div style="padding:56px 8px;text-align:center;display:flex;flex-direction:column;gap:8px;align-items:center"><h2 style="font-size:26px">L'archivio è vuoto</h2><p class="muted" style="margin:0;max-width:280px;font-size:15px">Scansiona il codice a barre sul retro di un libro. Per i libri senza codice usa «A mano».</p></div>`;
   const q = U.q.trim().toLowerCase();
-  const f = S.books.filter(b => (U.room === 'Tutti' || b.room === U.room) && (!q || (b.t + ' ' + b.a + ' ' + b.isbn).toLowerCase().includes(q)));
+  const f = S.books.filter(b => (U.room === 'Tutti' || b.room === U.room) && (!q || (b.t + ' ' + b.a + ' ' + b.isbn + ' ' + (b.gen || '') + ' ' + (b.kw || []).join(' ')).toLowerCase().includes(q)));
   if (!f.length) return `<div class="muted" style="padding:48px 0;text-align:center;font-size:15px">Nessun libro trovato.</div>`;
   if (S.layout === 'elenco') return [...f].sort((x, y) => x.t.localeCompare(y.t, 'it')).map(b => `<button class="row" data-a="open" data-v="${b.id}">
     <div class="thumb">${b.cover ? `<img src="${esc(b.cover)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : esc(initial(b.t))}</div>
@@ -452,6 +509,11 @@ function vBook() {
       <div style="display:flex;flex-direction:column;gap:4px;min-width:0"><h2 style="font-size:30px;line-height:1.02;text-wrap:balance;overflow-wrap:anywhere">${esc(b.t)}</h2><div style="font-size:16px">${esc(b.a)}</div></div>
     </div>
     <div class="facts">${[['Editore', b.p], ['Anno', b.y], ['Pagine', b.pg], ['ISBN', b.isbn]].map(([k, v]) => `<div><div class="k muted" style="font-size:10px;color:var(--n7)">${k}</div><div class="v">${esc(v || '—')}</div></div>`).join('')}</div>
+    ${b.gen || (b.kw && b.kw.length) || b.syn ? `<div style="display:flex;flex-direction:column;gap:10px">
+      ${b.gen ? `<div><div class="k muted" style="font-size:10px;color:var(--n7)">Genere</div><div style="font-family:var(--fh);font-weight:600;font-size:20px">${esc(b.gen)}</div></div>` : ''}
+      ${b.kw && b.kw.length ? `<div style="display:flex;flex-wrap:wrap;gap:6px">${b.kw.map(k => `<span class="tag">${esc(k)}</span>`).join('')}</div>` : ''}
+      ${b.syn ? `<details${String(b.syn).length < 420 ? ' open' : ''}><summary style="cursor:pointer;font-family:var(--fh);font-weight:600;font-size:18px">Sinossi</summary><p style="margin:8px 0 4px;font-size:15px;white-space:pre-line">${esc(b.syn)}</p>${b.synSrc ? `<div class="muted" style="font-size:12px">Fonte: ${esc(b.synSrc)}</div>` : ''}</details>` : ''}
+    </div>` : (detail && !b.mx ? `<div class="muted" style="font-size:13px">Genere, parole chiave e sinossi in arrivo…</div>` : '')}
     ${dupB ? '' : locBtn('Posizione', loc)}
   </div>
   <div class="bar">${detail ? `<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><button class="btn" data-a="edit">${ic('pen', 18)}Modifica</button><button class="btn" data-a="remove">${ic('trash', 18)}Rimuovi</button></div>`
@@ -640,6 +702,8 @@ function renderSheet() {
   if (U.sheet === 'menu') {
     el.innerHTML = `<div class="bd" data-a="closeSheet"></div><div class="sh"><div style="display:flex;justify-content:space-between;align-items:center"><h3 style="font-size:26px">Archivio</h3><button class="btn g ic" data-a="closeSheet" aria-label="Chiudi" style="color:var(--text)">${ic('x')}</button></div>
     <div style="border-top:1px solid var(--div)">
+      <div class="menu" style="cursor:default">${ic('check')}<span style="flex:1">Schede con sinossi e genere</span><span class="muted" style="font-size:13px">${S.books.filter(b => b.mx).length}/${S.books.length}${metaRun ? ' · in corso' : ''}</span></div>
+      ${S.books.some(b => b.mx && !b.syn) ? `<button class="menu" data-a="metaRetry">${ic('search')}<span style="flex:1">Riprova i libri senza sinossi</span><span class="muted" style="font-size:13px">${S.books.filter(b => b.mx && !b.syn).length}</span></button>` : ''}
       <button class="menu" data-a="dups">${ic('search')}<span style="flex:1">Cerca duplicati</span><span class="muted" style="font-size:13px">${(n => n ? (n === 1 ? '1 gruppo' : n + ' gruppi') : 'nessuno')(dupGroups().length)}</span></button>
       <button class="menu" data-a="csv">${ic('down')}<span style="flex:1">Esporta in CSV</span><span class="muted" style="font-size:13px">per Excel o Numbers</span></button>
       <button class="menu" data-a="backup">${ic('down')}<span style="flex:1">Salva un backup</span><span class="muted" style="font-size:13px">file .json</span></button>
@@ -714,7 +778,7 @@ const A = {
   remove: () => { const b = S.books.find(x => x.id === U.cur); if (!confirm(`Rimuovere «${b.t}» dall'archivio?`)) return; S.books = S.books.filter(x => x.id !== b.id); save(); go('archive'); toast('Rimosso: ' + b.t); },
   saveForm: () => {
     const f = U.form, clean = { t: f.t.trim(), a: f.a.trim(), p: f.p.trim(), y: f.y.trim(), pg: String(f.pg || '').trim(), isbn: norm(f.isbn) || f.isbn.replace(/\D/g, '') };
-    if (U.screen === 'edit') { const b = S.books.find(x => x.id === U.cur); if (clean.isbn !== b.isbn) { delete b.sp; delete b.col; delete b.dim; } Object.assign(b, clean, U.loc); S.lastLoc = { ...U.loc }; save(); enrich(); go('detail'); toast('Modifiche salvate'); }
+    if (U.screen === 'edit') { const b = S.books.find(x => x.id === U.cur); if (clean.isbn !== b.isbn) { delete b.sp; delete b.col; delete b.dim; delete b.mx; } Object.assign(b, clean, U.loc); S.lastLoc = { ...U.loc }; save(); enrich(); go('detail'); toast('Modifiche salvate'); }
     else { const [b] = addBooks([clean], U.loc); go('archive'); toast(`${b.t} → ${short(U.loc)}`); }
   },
   sheetLoc: () => { const det = U.screen === 'detail' ? S.books.find(x => x.id === U.cur) : null; U.draft = det ? { room: det.room, shelf: det.shelf, level: det.level } : { ...(U.loc || S.lastLoc) }; U.newRoom = false; U.sheet = 'loc'; renderSheet(); },
@@ -728,6 +792,7 @@ const A = {
     else U.loc = l;
     U.sheet = null; renderSheet(); render();
   },
+  metaRetry: () => { S.books.forEach(b => { if (b.mx && !b.syn) delete b.mx; }); save(); enrichMeta(); renderSheet(); toast('Riprovo a cercare le schede mancanti'); },
   dups: () => { U.dupSel = new Set(); go('dups'); },
   dupToggle: v => { const s = U.dupSel; s.has(v) ? s.delete(v) : s.add(v); render(); },
   dupKeepFirst: v => { const g = dupGroups()[+v]; if (!g) return; g.items.forEach((b, i) => i ? U.dupSel.add(b.id) : U.dupSel.delete(b.id)); render(); },
@@ -739,8 +804,8 @@ const A = {
     toast(list.length === 1 ? 'Eliminato 1 libro' : 'Eliminati ' + list.length + ' libri');
   },
   csv: () => {
-    const h = ['Titolo', 'Autore', 'Editore', 'Anno', 'Pagine', 'ISBN', 'Stanza', 'Scaffale', 'Ripiano', 'Aggiunto il'];
-    const rows = S.books.map(b => [b.t, b.a, b.p, b.y, b.pg, b.isbn, b.room, b.shelf, b.level, (b.added || '').slice(0, 10)]);
+    const h = ['Titolo', 'Autore', 'Editore', 'Anno', 'Pagine', 'ISBN', 'Stanza', 'Scaffale', 'Ripiano', 'Aggiunto il', 'Genere', 'Parole chiave', 'Sinossi'];
+    const rows = S.books.map(b => [b.t, b.a, b.p, b.y, b.pg, b.isbn, b.room, b.shelf, b.level, (b.added || '').slice(0, 10), b.gen || '', (b.kw || []).join(', '), b.syn || '']);
     download('\ufeff' + [h, ...rows].map(r => r.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(';')).join('\r\n'), `scaffale-${stamp()}.csv`, 'text/csv;charset=utf-8');
   },
   backup: () => download(JSON.stringify({ app: 'scaffale', v: 1, books: S.books, rooms: S.rooms }, null, 1), `scaffale-backup-${stamp()}.json`, 'application/json'),
