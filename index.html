@@ -292,7 +292,7 @@ const spineBtn = (b, cls, minW) => { const s = spineLook(b), w = Math.max(minW |
 function dominant(src) {
   return new Promise(res => {
     const im = new Image(); im.crossOrigin = 'anonymous'; im.referrerPolicy = 'no-referrer';
-    const t = setTimeout(() => res(null), 8000);
+    const t = setTimeout(() => res(null), 4000);
     im.onerror = () => { clearTimeout(t); res(null); };
     im.onload = () => {
       clearTimeout(t);
@@ -322,7 +322,7 @@ async function enrich() {
       if (!b) break;
       if (b.isbn && b.dim === undefined) {
         b.dim = null;
-        if (Date.now() < gbPause) { b.dim = undefined; break; }
+        if (Date.now() < gbPause) { b.dim = undefined; setTimeout(enrich, gbPause - Date.now() + 2000); break; }
         try { const j = await gbFetch(`q=isbn:${b.isbn}`); const v = j.items && j.items[0] && j.items[0].volumeInfo; if (v) { if (v.dimensions) b.dim = v.dimensions; if (!b.pg && v.pageCount) b.pg = v.pageCount; } } catch (e) {}
       }
       const ol = b.isbn && `https://covers.openlibrary.org/b/isbn/${b.isbn}-M.jpg?default=false`, px = u => u && !u.startsWith('data:') ? `https://wsrv.nl/?url=${encodeURIComponent(u)}&w=96&h=96&fit=inside&output=jpg` : null;
@@ -376,14 +376,15 @@ async function fetchMeta(b) {
 }
 let metaRun = false;
 async function enrichMeta() {
-  if (metaRun || enriching) return; metaRun = true;
+  if (metaRun) return; metaRun = true;
   try {
     for (;;) {
-      if (!navigator.onLine || Date.now() < gbPause) break;
+      if (!navigator.onLine) break;
+      if (Date.now() < gbPause) { setTimeout(enrichMeta, gbPause - Date.now() + 2000); break; }
       const b = S.books.find(x => !x.mx);
       if (!b) break;
       try { const m = await fetchMeta(b); Object.assign(b, { syn: m.syn, gen: m.gen, kw: m.kw, synSrc: m.src, mx: 1 }); }
-      catch (e) { if (Date.now() < gbPause) break; b.mx = 1; }
+      catch (e) { if (Date.now() < gbPause) continue; b.mx = 1; }
       save();
       if (U.screen === 'detail' && U.cur === b.id) render();
       if (U.sheet === 'menu') renderSheet();
@@ -722,7 +723,7 @@ function renderSheet() {
   if (U.sheet === 'menu') {
     el.innerHTML = `<div class="bd" data-a="closeSheet"></div><div class="sh"><div style="display:flex;justify-content:space-between;align-items:center"><h3 style="font-size:26px">Archivio</h3><button class="btn g ic" data-a="closeSheet" aria-label="Chiudi" style="color:var(--text)">${ic('x')}</button></div>
     <div style="border-top:1px solid var(--div)">
-      <div class="menu" style="cursor:default">${ic('check')}<span style="flex:1">Schede con sinossi e genere</span><span class="muted" style="font-size:13px">${S.books.filter(b => b.mx).length}/${S.books.length}${metaRun ? ' · in corso' : ''}</span></div>
+      <div class="menu" style="cursor:default">${ic('check')}<span style="flex:1">Schede con sinossi e genere</span><span class="muted" style="font-size:13px">${S.books.filter(b => b.mx).length}/${S.books.length}${metaRun ? ' · in corso' : Date.now() < gbPause ? ' · in pausa fino alle ' + new Date(gbPause).toTimeString().slice(0, 5) : ''}</span></div>
       ${S.books.some(b => b.mx && !b.syn) ? `<button class="menu" data-a="metaRetry">${ic('search')}<span style="flex:1">Riprova i libri senza sinossi</span><span class="muted" style="font-size:13px">${S.books.filter(b => b.mx && !b.syn).length}</span></button>` : ''}
       <button class="menu" data-a="nocover">${ic('cam')}<span style="flex:1">Libri senza copertina</span><span class="muted" style="font-size:13px">${S.books.filter(b => !b.cover).length}</span></button>
       <button class="menu" data-a="dups">${ic('search')}<span style="flex:1">Cerca duplicati</span><span class="muted" style="font-size:13px">${(n => n ? (n === 1 ? '1 gruppo' : n + ' gruppi') : 'nessuno')(dupGroups().length)}</span></button>
@@ -997,6 +998,9 @@ document.addEventListener('visibilitychange', () => { if (document.hidden) camSt
 if (S.colv !== 2) { S.books.forEach(b => { if (!isHex(b.col)) delete b.sp; }); S.colv = 2; save(); }
 render();
 enrich();
+enrichMeta();
+window.addEventListener('online', () => { enrich(); enrichMeta(); });
+document.addEventListener('visibilitychange', () => { if (!document.hidden) { enrich(); enrichMeta(); } });
 if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('./sw.js').catch(() => {});
 </script>
 </body>
