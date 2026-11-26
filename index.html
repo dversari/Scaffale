@@ -403,7 +403,7 @@ function vList() {
 }
 function vScanner() {
   const single = U.mode === 'single', link = U.mode === 'link';
-  const lx = link && U.shot && U.shot.items[U.linkIdx], left = link && U.shot ? U.shot.items.filter(needScan).length : 0;
+  const lx = link && U.shot && U.shot.items[U.linkIdx], left = link && U.shot && U.linkOne == null ? U.shot.items.filter(needScan).length : 0;
   return `<div class="scr dark"><div class="shade"></div>
   <div style="position:relative;padding:calc(var(--sat) + 8px) 12px 0;display:grid;grid-template-columns:44px minmax(0,1fr) 44px;align-items:center">
     <button class="dbtn" data-a="${link ? 'linkDone' : 'home'}" aria-label="Chiudi">${ic('x', 22)}</button>
@@ -425,7 +425,7 @@ function vScanner() {
       <button class="btn" style="color:var(--bg);border-color:rgba(242,240,235,.35);background:rgba(29,31,32,.55)">Cerca</button>
     </form>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px"><button class="dbtn" data-a="isbnPhoto" style="font-size:15px">${ic('cam', 18)}Foto dell'ISBN</button><button class="dbtn" data-a="coverPhoto" style="font-size:15px">${ic('cam', 18)}Foto copertina</button></div>
-    ${link ? `<button class="dbtn" data-a="linkSkip">Salta questo libro${left > 1 ? ' · ne restano ' + left : ''}</button>` : `<button class="dbtn" data-a="manual">${ic('pen', 18)}Libro senza codice? Inserisci a mano</button>`}
+    ${link ? `<button class="dbtn" data-a="linkSkip">${U.linkOne != null ? 'Annulla' : 'Salta questo libro' + (left > 1 ? ' · ne restano ' + left : '')}</button>` : `<button class="dbtn" data-a="manual">${ic('pen', 18)}Libro senza codice? Inserisci a mano</button>`}
   </div>` : `<div class="tray" style="position:relative;padding:14px 20px calc(var(--sab) + 14px);display:flex;flex-direction:column;gap:10px">
     <div style="display:flex;justify-content:space-between;align-items:baseline"><span class="k">Letti in questa serie</span><span style="font-family:var(--fh);font-weight:600;font-size:20px">${U.queue.length === 1 ? '1 libro' : U.queue.length + ' libri'}</span></div>
     <div style="min-height:96px">${U.queue.length ? [...U.queue].reverse().slice(0, 3).map(x => `<div style="display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px solid var(--div);font-size:14px"><span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(x.t)}</span><span class="muted" style="flex:none;font-size:12px">${x.dup ? 'già presente' : x.status === 'loading' ? '…' : x.status === 'missing' ? 'da completare' : esc((x.a || '').split(',')[0].split(' ').slice(-1)[0])}</span></div>`).join('') : '<div class="muted" style="font-size:13px;padding:8px 0">Ogni codice letto finisce qui. Alla fine scegli la posizione per tutti.</div>'}</div>
@@ -529,17 +529,18 @@ async function linkCode(d) {
     const ex = S.books.find(b => b.isbn === d);
     if (ex) {
       if (U.shot.items.some(y => y !== x && y.id === ex.id)) { flash('Già in questa foto', ex.t); return; }
-      Object.assign(x, { id: ex.id, info: null, include: true }); flash(ex.t, 'Era già in archivio · abbinato');
+      Object.assign(x, { id: ex.id, info: null, include: true, scanned: true }); flash(ex.t, 'Era già in archivio · abbinato');
     } else {
       flash('ISBN ' + d, 'Cerco l\'edizione…');
       const info = await lookup(d);
-      Object.assign(x, { info: info ? { isbn: d, ...info, src: 'codice' } : { isbn: d, t: x.t, a: x.a, src: 'codice' }, include: true });
+      Object.assign(x, { id: null, info: info ? { isbn: d, ...info, src: 'codice' } : { isbn: d, t: x.t, a: x.a, src: 'codice' }, include: true, scanned: true });
       flash(x.info.t, info ? 'Edizione registrata' : 'Edizione non trovata online: tengo titolo e autore letti');
     }
     setTimeout(nextLink, 1300);
   } finally { setTimeout(() => { linkBusy = false; }, 1300); }
 }
-const needScan = y => !y.id && (!y.info ? y.status !== 'looking' : U.linkAll && y.include && y.info.src === 'titolo');
+const unsure = y => !y.scanned && y.status !== 'looking' && (y.conf !== 'alta' || (!y.id && !y.info));
+const needScan = y => U.linkOne == null && unsure(y);
 async function findByTitle(t, a, p) {
   try {
     const sur = a ? a.split(',')[0].trim().split(' ').slice(-1)[0] : '';
@@ -558,8 +559,8 @@ async function findByTitle(t, a, p) {
 }
 function nextLink() {
   if (U.screen !== 'scanner' || U.mode !== 'link') return;
-  const i = U.shot.items.findIndex((y, k) => k > U.linkIdx && needScan(y));
-  if (i < 0) { U.mode = 'single'; go('shot'); return; }
+  const i = U.linkOne != null ? -1 : U.shot.items.findIndex((y, k) => k > U.linkIdx && needScan(y));
+  if (i < 0) { U.mode = 'single'; U.linkOne = null; go('shot'); return; }
   U.linkIdx = i; lastCode = ''; U.flash = null; render();
 }
 function vShot() {
@@ -573,15 +574,16 @@ function vShot() {
   } else if (s.phase === 'working') {
     body = `${pic}<div style="text-align:center;display:flex;flex-direction:column;gap:4px"><h2 style="font-size:26px">Leggo i dorsi…</h2><p class="muted" style="margin:0;font-size:14px">Di solito 10–30 secondi.</p></div>`;
   } else if (s.phase === 'review') {
-    const inc = s.items.filter(x => x.include).length, todo = s.items.filter(x => !x.id && !x.info && x.status !== 'looking').length, verify = s.items.filter(x => !x.id && x.info && x.info.src === 'titolo' && x.include).length;
+    const inc = s.items.filter(x => x.include).length, todo = s.items.filter(x => !x.id && !x.info && x.status !== 'looking').length, nUns = s.items.filter(unsure).length;
     body = `${pic}<div><div class="k">${s.items.length === 1 ? '1 dorso letto' : s.items.length + ' dorsi letti'}</div><h2 style="font-size:30px;margin-top:2px">Controlla prima di salvare</h2></div>${locBtn('Ripiano fotografato', U.loc)}
-    ${todo ? `<div class="hint">${ic('scan', 18)}<span>${todo === 1 ? '1 libro non trovato' : todo + ' libri non trovati'} online: si salvano con titolo e autore letti sul dorso. Per i dati completi scansiona il codice o fotografa l'ISBN.</span></div>` : ''}${verify ? `<div class="hint">${ic('check', 18)}<span>${verify === 1 ? '1 libro nuovo riconosciuto' : verify + ' libri nuovi riconosciuti'} dal dorso: verranno aggiunti con l'edizione più probabile. Per quella esatta usa «Verifica edizione col codice».</span></div>` : ''}
+    ${todo ? `<div class="hint">${ic('scan', 18)}<span>${todo === 1 ? '1 libro non trovato' : todo + ' libri non trovati'} online: si salvano con titolo e autore letti sul dorso. Per i dati completi scansiona il codice o fotografa l'ISBN.</span></div>` : ''}${nUns ? `<div class="hint">${ic('scan', 18)}<span>${nUns === 1 ? '1 libro è da controllare' : nUns + ' libri sono da controllare'}: tocca ${ic('scan', 14)} accanto a un libro per scansionarne il codice, oppure «Scansiona i da controllare» per farli tutti di fila. Gli altri restano come sono.</span></div>` : ''}
     ${s.items.length ? `<div style="border-top:1px solid var(--div)">${s.items.map((x, i) => {
       const b = x.id && S.books.find(y => y.id === x.id), d = b || x.info || x;
       const note = b ? (b.room === U.loc.room && b.shelf === U.loc.shelf && +b.level === +U.loc.level ? 'già qui' : 'in archivio · ora in ' + short(b)) : x.info ? (x.info.src === 'titolo' ? 'nuovo · dal dorso' + (x.info.p ? ' · ' + x.info.p : '') + (x.info.y ? ' ' + x.info.y : '') : 'nuovo · edizione dal codice' + (x.info.isbn ? ' ' + x.info.isbn : '')) : x.status === 'looking' ? 'cerco online…' : 'non trovato online · si salva col titolo letto';
-      return `<button class="row" data-a="shotToggle" data-v="${i}" style="grid-template-columns:24px minmax(0,1fr) auto"><span class="check ${x.include ? 'on' : ''}">${x.include ? ic('check', 14) : ''}</span><div style="min-width:0"><div class="t1">${esc(d.t)}</div><div class="t2">${esc(d.a || '—')} · ${esc(note)}</div></div>${x.conf === 'bassa' ? '<span class="tag n">Incerto</span>' : ''}</button>`;
+      const tag = x.scanned ? '<span class="tag">Verificato</span>' : unsure(x) ? '<span class="tag n">Da controllare</span>' : '';
+      return `<div class="row" style="grid-template-columns:minmax(0,1fr) 44px;gap:4px;cursor:default"><button data-a="shotToggle" data-v="${i}" aria-pressed="${x.include}" style="all:unset;cursor:pointer;display:grid;grid-template-columns:24px minmax(0,1fr) auto;gap:12px;align-items:center;min-width:0"><span class="check ${x.include ? 'on' : ''}">${x.include ? ic('check', 14) : ''}</span><div style="min-width:0"><div class="t1">${esc(d.t)}</div><div class="t2">${esc(d.a || '—')} · ${esc(note)}</div></div>${tag}</button><button class="btn g ic" data-a="linkOne" data-v="${i}" aria-label="Scansiona il codice di ${esc(d.t)}" style="color:${unsure(x) ? 'var(--a7)' : 'var(--n4)'}">${ic('scan', 22)}</button></div>`;
     }).join('')}</div>` : '<div class="hint">Nessun dorso riconosciuto. Prova più vicino, con più luce e il telefono dritto.</div>'}`;
-    bar = `<button class="btn p bp" data-a="saveShot" ${inc ? '' : 'disabled'}>${M}${inc === 1 ? 'Salva 1 libro' : 'Salva ' + inc + ' libri'} → ${esc(short(U.loc))}</button>${todo ? `<button class="btn" data-a="linkStart">${ic('scan', 18)}Scansiona ${todo === 1 ? '1 codice mancante' : todo + ' codici mancanti'}</button>` : ''}${verify ? `<button class="btn" data-a="linkVerify">${ic('scan', 18)}Verifica edizione col codice (${verify})</button>` : ''}<button class="btn g" data-a="shotPick">${ic('cam', 18)}Rifai foto</button>`;
+    bar = `<button class="btn p bp" data-a="saveShot" ${inc ? '' : 'disabled'}>${M}${inc === 1 ? 'Salva 1 libro' : 'Salva ' + inc + ' libri'} → ${esc(short(U.loc))}</button>${nUns ? `<button class="btn" data-a="linkStart">${ic('scan', 18)}Scansiona i da controllare (${nUns})</button>` : ''}<button class="btn g" data-a="shotPick">${ic('cam', 18)}Rifai foto</button>`;
   } else {
     body = `<div><h2 style="font-size:32px">Fotografa un ripiano</h2><p class="muted" style="margin:4px 0 0;font-size:14px">Un ripiano per foto, inquadrato dritto, con i dorsi leggibili. Dopo la lettura controlli l'elenco: i libri confermati vengono messi qui, nell'ordine della foto.</p></div>${locBtn('Ripiano fotografato', U.loc)}${s.err ? `<div class="hint">${esc(s.err)}</div>` : ''}`;
     bar = `<button class="btn p bp" data-a="shotPick">${M}${ic('cam')}Scatta o scegli foto</button>`;
@@ -655,10 +657,10 @@ const A = {
   coverPhoto: () => { if (!getKey()) { const m = 'Serve la chiave API Claude: impostala da «Foto» nella schermata principale'; U.screen === 'scanner' ? flash('Chiave mancante', m) : toast(m); return; } $('#coverFile').click(); },
   isbnPhoto: () => { if (!getKey()) { flash('Serve la chiave API Claude', 'Impostala da «Foto» nella schermata principale'); return; } $('#isbnFile').click(); },
   shotToggle: v => { const x = U.shot.items[+v]; x.include = !x.include; render(); },
-  linkVerify: () => { U.linkAll = true; const i = U.shot.items.findIndex(needScan); if (i < 0) return; U.linkIdx = i; U.mode = 'link'; U.flash = null; lastCode = ''; go('scanner'); },
-  linkStart: v => { U.linkAll = false; const i = v !== undefined && v !== '' ? +v : U.shot.items.findIndex(needScan); if (i < 0) return; U.linkIdx = i; U.mode = 'link'; U.flash = null; lastCode = ''; go('scanner'); },
+  linkOne: v => { U.linkOne = +v; U.linkIdx = +v; U.mode = 'link'; U.flash = null; lastCode = ''; go('scanner'); },
+  linkStart: () => { U.linkOne = null; const i = U.shot.items.findIndex(needScan); if (i < 0) return; U.linkIdx = i; U.mode = 'link'; U.flash = null; lastCode = ''; go('scanner'); },
   linkSkip: () => nextLink(),
-  linkDone: () => { U.mode = 'single'; go('shot'); },
+  linkDone: () => { U.mode = 'single'; U.linkOne = null; go('shot'); },
   saveShot: () => {
     const L = { ...U.loc }; let moved = 0, added = 0;
     U.shot.items.forEach((x, i) => {
@@ -803,7 +805,7 @@ $('#coverFile').addEventListener('change', async e => {
     if (U.screen === 'scanner' && U.mode === 'link') {
       const x = U.shot && U.shot.items[U.linkIdx];
       const ex = info.isbn && S.books.find(b => b.isbn === info.isbn);
-      if (x) { if (ex && !U.shot.items.some(y => y.id === ex.id)) Object.assign(x, { id: ex.id, include: true }); else Object.assign(x, { info, include: true }); }
+      if (x) { if (ex && !U.shot.items.some(y => y.id === ex.id)) Object.assign(x, { id: ex.id, info: null, include: true, scanned: true }); else Object.assign(x, { id: null, info, include: true, scanned: true }); }
       flash(info.t, 'Registrato dalla copertina'); setTimeout(nextLink, 1300); return;
     }
     if (U.screen === 'scanner' && U.mode === 'batch') {
