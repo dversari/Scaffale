@@ -321,7 +321,7 @@ async function enrich() {
       for (const s of srcs) { const c = await dominant(s); if (c) { b.col = c; break; } }
       b.sp = 1; save();
       if (U.screen === 'archive' && S.layout === 'dorsi') $('#list').innerHTML = vList();
-      await new Promise(r => setTimeout(r, 1500));
+      await new Promise(r => setTimeout(r, getGKey() ? 300 : 1500));
     }
   } finally { enriching = false; }
   enrichMeta();
@@ -378,7 +378,7 @@ async function enrichMeta() {
       save();
       if (U.screen === 'detail' && U.cur === b.id) render();
       if (U.sheet === 'menu') renderSheet();
-      await new Promise(r => setTimeout(r, 1500));
+      await new Promise(r => setTimeout(r, getGKey() ? 300 : 1500));
     }
   } finally { metaRun = false; }
 }
