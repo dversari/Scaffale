@@ -591,9 +591,31 @@ function vShot() {
   return `<div class="scr">${top}<div class="body" style="display:flex;flex-direction:column;gap:16px;padding-top:6px">${body}</div>${bar ? `<div class="bar">${bar}</div>` : ''}</div>`;
 }
 
+/* ——— duplicati ——— */
+const nrm = t => String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9 ]+/g, ' ').replace(/\b(il|lo|la|i|gli|le|l|un|una|uno|the|a)\b/g, ' ').replace(/\s+/g, ' ').trim();
+function dupGroups() {
+  const out = [], seen = new Set(), by = (key, f) => { const m = {}; S.books.forEach(b => { const k = f(b); if (k) (m[k] = m[k] || []).push(b); }); return Object.values(m).filter(g => g.length > 1); };
+  const order = g => g.sort((x, y) => (x.room === 'Da collocare') - (y.room === 'Da collocare') || String(x.added || '').localeCompare(String(y.added || '')));
+  by('isbn', b => b.isbn || '').forEach(g => { out.push({ kind: 'isbn', key: g[0].isbn, items: order(g) }); g.forEach(b => seen.add(b.id)); });
+  by('t', b => nrm(String(b.t).split(':')[0]) ? nrm(String(b.t).split(':')[0]) + '|' + nrm(String(b.a || '').split(',')[0]) : '').filter(g => g.some(b => !seen.has(b.id))).forEach(g => out.push({ kind: 'titolo', items: order(g) }));
+  return out;
+}
+function vDups() {
+  const G = dupGroups(), sel = U.dupSel || (U.dupSel = new Set());
+  [...sel].forEach(id => { if (!S.books.some(b => b.id === id)) sel.delete(id); });
+  const n = sel.size;
+  const row = b => `<button class="row" data-a="dupToggle" data-v="${b.id}" style="grid-template-columns:24px minmax(0,1fr)"><span class="check ${sel.has(b.id) ? 'on' : ''}">${sel.has(b.id) ? ic('check', 14) : ''}</span><div style="min-width:0"><div class="t1">${esc(b.t)}</div><div class="t2">${esc(b.a || '—')} · ${esc(short(b))}</div><div class="t2">${esc([b.p, b.y, b.isbn ? 'ISBN ' + b.isbn : 'senza ISBN', b.added ? 'aggiunto il ' + b.added.slice(0, 10) : ''].filter(Boolean).join(' · '))}</div></div></button>`;
+  return `<div class="scr"><div class="top nav"><button class="btn g" data-a="home" style="font-size:16px">${ic('back')}Archivio</button><span class="k" style="padding-right:8px;color:var(--n7)">Duplicati</span></div>
+  <div class="body" style="display:flex;flex-direction:column;gap:18px;padding-top:6px">
+    <div><h2 style="font-size:32px">${G.length ? (G.length === 1 ? '1 gruppo di possibili duplicati' : G.length + ' gruppi di possibili duplicati') : 'Nessun duplicato'}</h2><p class="muted" style="margin:4px 0 0;font-size:14px">${G.length ? 'Seleziona le copie da eliminare. Niente viene cancellato finché non confermi.' : 'Non ci sono libri con lo stesso ISBN o con stesso titolo e autore.'}</p></div>
+    ${G.map((g, gi) => `<div><div class="gh"><span class="k" style="font-size:12px">${g.kind === 'isbn' ? 'Stesso ISBN · ' + esc(g.key) : 'Stesso titolo e autore · forse edizioni diverse'}</span><button class="btn g" data-a="dupKeepFirst" data-v="${gi}" style="min-height:32px;font-size:14px;padding:0 4px;flex:none;white-space:nowrap">Tieni il primo</button></div>${g.items.map(row).join('')}</div>`).join('')}
+  </div>
+  ${G.length ? `<div class="bar"><button class="btn p bp" data-a="dupDelete" ${n ? '' : 'disabled'}>${M}${ic('trash', 18)}${n ? (n === 1 ? 'Elimina 1 libro selezionato' : 'Elimina ' + n + ' libri selezionati') : 'Seleziona le copie da eliminare'}</button></div>` : ''}</div>`;
+}
+
 function render() {
   const s = U.screen;
-  $('#app').innerHTML = s === 'archive' ? vArchive() : s === 'scanner' ? vScanner() : s === 'result' || s === 'detail' ? vBook() : s === 'manual' || s === 'edit' ? vForm() : s === 'batch' ? vBatch() : s === 'shot' ? vShot() : '';
+  $('#app').innerHTML = s === 'archive' ? vArchive() : s === 'scanner' ? vScanner() : s === 'result' || s === 'detail' ? vBook() : s === 'manual' || s === 'edit' ? vForm() : s === 'batch' ? vBatch() : s === 'shot' ? vShot() : s === 'dups' ? vDups() : '';
 }
 function renderSheet() {
   const el = $('#sheet');
@@ -618,6 +640,7 @@ function renderSheet() {
   if (U.sheet === 'menu') {
     el.innerHTML = `<div class="bd" data-a="closeSheet"></div><div class="sh"><div style="display:flex;justify-content:space-between;align-items:center"><h3 style="font-size:26px">Archivio</h3><button class="btn g ic" data-a="closeSheet" aria-label="Chiudi" style="color:var(--text)">${ic('x')}</button></div>
     <div style="border-top:1px solid var(--div)">
+      <button class="menu" data-a="dups">${ic('search')}<span style="flex:1">Cerca duplicati</span><span class="muted" style="font-size:13px">${(n => n ? (n === 1 ? '1 gruppo' : n + ' gruppi') : 'nessuno')(dupGroups().length)}</span></button>
       <button class="menu" data-a="csv">${ic('down')}<span style="flex:1">Esporta in CSV</span><span class="muted" style="font-size:13px">per Excel o Numbers</span></button>
       <button class="menu" data-a="backup">${ic('down')}<span style="flex:1">Salva un backup</span><span class="muted" style="font-size:13px">file .json</span></button>
       <button class="menu" data-a="restore">${ic('up')}<span style="flex:1">Ripristina un backup</span></button>
@@ -704,6 +727,16 @@ const A = {
     if (U.screen === 'detail') { const b = S.books.find(x => x.id === U.cur); Object.assign(b, l); delete b.pos; S.lastLoc = l; save(); toast('Spostato in ' + short(l)); }
     else U.loc = l;
     U.sheet = null; renderSheet(); render();
+  },
+  dups: () => { U.dupSel = new Set(); go('dups'); },
+  dupToggle: v => { const s = U.dupSel; s.has(v) ? s.delete(v) : s.add(v); render(); },
+  dupKeepFirst: v => { const g = dupGroups()[+v]; if (!g) return; g.items.forEach((b, i) => i ? U.dupSel.add(b.id) : U.dupSel.delete(b.id)); render(); },
+  dupDelete: () => {
+    const ids = [...U.dupSel], list = S.books.filter(b => ids.includes(b.id));
+    if (!list.length) return;
+    if (!confirm(`Eliminare definitivamente ${list.length === 1 ? '«' + list[0].t + '»' : list.length + ' libri'} dall'archivio? Non si può annullare.`)) return;
+    S.books = S.books.filter(b => !ids.includes(b.id)); save(); U.dupSel = new Set(); render();
+    toast(list.length === 1 ? 'Eliminato 1 libro' : 'Eliminati ' + list.length + ' libri');
   },
   csv: () => {
     const h = ['Titolo', 'Autore', 'Editore', 'Anno', 'Pagine', 'ISBN', 'Stanza', 'Scaffale', 'Ripiano', 'Aggiunto il'];
