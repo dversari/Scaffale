@@ -803,7 +803,7 @@ const A = {
     if (U.screen === 'edit') { const b = S.books.find(x => x.id === U.cur); if (clean.isbn !== b.isbn) { delete b.sp; delete b.col; delete b.dim; delete b.mx; } Object.assign(b, clean, U.loc); S.lastLoc = { ...U.loc }; save(); enrich(); go('detail'); toast('Modifiche salvate'); }
     else { const [b] = addBooks([clean], U.loc); go('archive'); toast(`${b.t} → ${short(U.loc)}`); }
   },
-  sheetLoc: () => { const det = U.screen === 'detail' ? S.books.find(x => x.id === U.cur) : null; U.draft = det ? { room: det.room, shelf: det.shelf, level: det.level } : { ...(U.loc || S.lastLoc) }; U.newRoom = false; U.sheet = 'loc'; renderSheet(); },
+  sheetLoc: () => { const det = U.screen === 'detail' ? S.books.find(x => x.id === U.cur) : null; U.draft = det ? { room: det.room, shelf: det.shelf, level: det.level } : { ...(U.loc || S.lastLoc) }; if (U.draft.room === 'Da collocare') { const l = S.lastLoc && S.lastLoc.room !== 'Da collocare' ? S.lastLoc : { room: Object.keys(MAPS)[0], shelf: 'A', level: 1 }; U.draft = { ...l }; } U.newRoom = false; U.sheet = 'loc'; renderSheet(); },
   closeSheet: () => { U.sheet = null; renderSheet(); },
   pick: (v, el) => { const k = el.dataset.k; U.draft[k] = k === 'level' ? +v : v; if (k === 'room' && !MAPS[v] && !SHELVES.includes(U.draft.shelf)) { U.draft.shelf = 'A'; U.draft.level = 1; } renderSheet(); },
   pickVano: v => { const m = String(v).match(/^(\d+)(.*)$/); if (!m) return; U.draft.level = +m[1]; U.draft.shelf = m[2]; renderSheet(); },
@@ -995,6 +995,7 @@ $('#shotFile').addEventListener('change', async e => {
 });
 document.addEventListener('visibilitychange', () => { if (document.hidden) camStop(); else if (U.screen === 'scanner') camStart(); });
 
+{ const want = [...Object.keys(MAPS), ...S.books.map(b => b.room)]; let ch = false; want.forEach(r => { if (r && !S.rooms.includes(r)) { MAPS[r] ? S.rooms.unshift(r) : S.rooms.push(r); ch = true; } }); const i = S.rooms.indexOf('Da collocare'); if (i >= 0 && i !== S.rooms.length - 1) { S.rooms.splice(i, 1); S.rooms.push('Da collocare'); ch = true; } if (ch) save(); }
 if (S.colv !== 2) { S.books.forEach(b => { if (!isHex(b.col)) delete b.sp; }); S.colv = 2; save(); }
 render();
 enrich();
