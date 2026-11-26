@@ -65,7 +65,7 @@ h1,h2,h3{font-family:var(--fh);font-weight:600;letter-spacing:-.015em;line-heigh
 .thumb img{width:100%;height:100%;object-fit:cover}
 .gh{display:flex;align-items:baseline;justify-content:space-between;gap:8px;padding-bottom:6px;border-bottom:1px solid var(--text)}
 .shelf{display:flex;align-items:flex-end;gap:3px;min-height:160px;padding:0 6px;border-bottom:2px solid var(--text);overflow-x:auto}
-.spine{all:unset;cursor:pointer;box-sizing:border-box;flex:none;border:1px solid var(--div);writing-mode:vertical-rl;transform:rotate(180deg);padding:8px 0;display:flex;align-items:center;justify-content:center;font-family:var(--fh);font-weight:600;font-size:13px;line-height:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.spine{all:unset;cursor:pointer;box-sizing:border-box;flex:none;border:1px solid var(--div);writing-mode:vertical-rl;transform:rotate(180deg);padding:8px 2px;display:flex;align-items:center;justify-content:center;text-align:center;font-family:var(--fh);font-weight:600;font-size:13px;line-height:1.05;white-space:normal;overflow-wrap:anywhere;overflow:hidden}
 .spine{box-shadow:inset 2px 0 0 rgba(255,255,255,.14),inset -2px 0 0 rgba(0,0,0,.14)}
 .spine.new{outline:2px solid var(--a);outline-offset:2px}
 .mapw svg{display:block;width:100%;height:auto;background:#f2f0eb}
@@ -281,6 +281,12 @@ function spineLook(b) {
   const bg = isHex(b.col) ? b.col : FALL[h % FALL.length];
   return { w, hp, bg, ink: inkFor(bg), fs: w < 24 ? 11 : 13 };
 }
+function fitSpine(t, w, h) {
+  const len = String(t).length, L = h - 18, W = w - 4;
+  for (let fs = 13; fs >= 7; fs -= 0.5) { const lines = Math.max(1, Math.floor(W / (fs * 1.08))), per = Math.floor(L / (fs * 0.5)); if (lines * per >= len) return fs; }
+  return 7;
+}
+const spineBtn = (b, cls, minW) => { const s = spineLook(b), w = Math.max(minW || 0, s.w); return `<button class="spine ${cls || ''}" data-a="open" data-v="${b.id}" title="${esc(b.t)}" style="height:${s.hp}px;width:${w}px;background:${s.bg};color:${s.ink};font-size:${fitSpine(b.t, w, s.hp)}px">${esc(b.t)}</button>`; };
 function dominant(src) {
   return new Promise(res => {
     const im = new Image(); im.crossOrigin = 'anonymous'; im.referrerPolicy = 'no-referrer';
@@ -317,7 +323,8 @@ async function enrich() {
         if (Date.now() < gbPause) { b.dim = undefined; break; }
         try { const j = await gbFetch(`q=isbn:${b.isbn}`); const v = j.items && j.items[0] && j.items[0].volumeInfo; if (v) { if (v.dimensions) b.dim = v.dimensions; if (!b.pg && v.pageCount) b.pg = v.pageCount; } } catch (e) {}
       }
-      const srcs = [b.cover, b.isbn && `https://covers.openlibrary.org/b/isbn/${b.isbn}-M.jpg?default=false`].filter(Boolean);
+      const ol = b.isbn && `https://covers.openlibrary.org/b/isbn/${b.isbn}-M.jpg?default=false`, px = u => u && !u.startsWith('data:') ? `https://wsrv.nl/?url=${encodeURIComponent(u)}&w=96&h=96&fit=inside&output=jpg` : null;
+      const srcs = [b.cover, px(b.cover), ol, px(ol)].filter(Boolean);
       for (const s of srcs) { const c = await dominant(s); if (c) { b.col = c; break; } }
       b.sp = 1; save();
       if (U.screen === 'archive' && S.layout === 'dorsi') $('#list').innerHTML = vList();
@@ -453,7 +460,7 @@ function vList() {
   groups.forEach(x => x.items.sort((p, q) => (p.pos ?? 1e9) - (q.pos ?? 1e9)));
   const head = x => `<div style="display:flex;align-items:baseline;gap:8px;min-width:0"><span style="font-family:var(--fh);font-weight:600;font-size:20px">${esc(x.room)}</span><span class="k" style="font-size:12px;letter-spacing:.06em">${x.sub}</span></div><span class="muted" style="font-size:12px;flex:none">${x.items.length === 1 ? '1 libro' : x.items.length + ' libri'}</span>`;
   if (S.layout === 'dorsi') return `<div style="display:flex;flex-direction:column;gap:26px;padding-top:6px">${Object.keys(MAPS).filter(r => f.some(b => b.room === r && vanoOf(b)) || (!U.q.trim() && (U.room === 'Tutti' || U.room === r))).map(r => { const n = f.filter(b => b.room === r && vanoOf(b)).length; return `<div style="display:flex;flex-direction:column;gap:8px"><div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px"><div style="display:flex;align-items:baseline;gap:8px"><span style="font-family:var(--fh);font-weight:600;font-size:20px">${esc(r)}</span><span class="k" style="font-size:12px;letter-spacing:.06em">${esc(MAPS[r].name)}</span></div><span class="muted" style="font-size:12px">${n === 1 ? '1 libro' : n + ' libri'}</span></div><div class="mapw">${woodSvg(r, { books: f })}</div>${n ? '' : `<p class="muted" style="margin:0;font-size:14px">Nessun libro ancora in questa libreria. Apri un libro e tocca la posizione, oppure usa «Foto» davanti a un ripiano.</p>`}</div>`; }).join('')}${groups.map(x => `<div style="display:flex;flex-direction:column;gap:8px"><div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px">${head(x)}</div>
-    <div class="shelf">${x.items.map(b => { const s = spineLook(b); return `<button class="spine ${isNew(b) ? 'new' : ''}" data-a="open" data-v="${b.id}" title="${esc(b.t)}" style="height:${s.hp}px;width:${s.w}px;background:${s.bg};color:${s.ink};font-size:${s.fs}px">${esc(b.t)}</button>`; }).join('')}</div></div>`).join('')}</div>`;
+    <div class="shelf">${x.items.map(b => spineBtn(b, isNew(b) ? 'new' : '')).join('')}</div></div>`).join('')}</div>`;
   return `<div style="display:flex;flex-direction:column;gap:22px">${groups.map(x => `<div><div class="gh">${head(x)}</div>${x.items.map(b => `<button class="row" data-a="open" data-v="${b.id}" style="grid-template-columns:minmax(0,1fr) auto;padding:11px 0">
     <div style="min-width:0"><div class="t1">${esc(b.t)}</div><div class="t2">${esc(b.a)}${b.y ? ' · ' + esc(b.y) : ''}</div></div>
     <div style="display:flex;align-items:center;gap:8px;color:var(--n4)">${isNew(b) ? '<span class="tag">Nuovo</span>' : ''}${ic('next', 16)}</div></button>`).join('')}</div>`).join('')}</div>`;
@@ -686,7 +693,7 @@ function renderSheet() {
     const [room, n] = U.vano, v = MAPS[room].vani.find(x => x.n === n);
     const list = S.books.filter(b => b.room === room && vanoOf(b) === v).sort((p, q) => (p.pos ?? 1e9) - (q.pos ?? 1e9));
     el.innerHTML = `<div class="bd" data-a="closeSheet"></div><div class="sh"><div style="display:flex;justify-content:space-between;align-items:center"><div><div class="k">${esc(room)} · ${esc(MAPS[room].name)}</div><h3 style="font-size:30px">Vano ${esc(n)}${v.o ? ' <span class="muted" style="font-size:18px">· aperto</span>' : ''}</h3></div><button class="btn g ic" data-a="closeSheet" aria-label="Chiudi" style="color:var(--text)">${ic('x')}</button></div>
-    ${list.length ? `<div class="shelf">${list.map(b => { const sl = spineLook(b); return `<button class="spine" data-a="open" data-v="${b.id}" title="${esc(b.t)}" style="height:${sl.hp}px;width:${Math.max(28, sl.w)}px;background:${sl.bg};color:${sl.ink};font-size:${sl.fs}px">${esc(b.t)}</button>`; }).join('')}</div>
+    ${list.length ? `<div class="shelf">${list.map(b => spineBtn(b, '', 28)).join('')}</div>
     <div style="border-top:1px solid var(--div)">${list.map(b => `<button class="row" data-a="open" data-v="${b.id}" style="grid-template-columns:minmax(0,1fr) auto;padding:10px 0"><div style="min-width:0"><div class="t1">${esc(b.t)}</div><div class="t2">${esc(b.a)}</div></div><span style="color:var(--n4)">${ic('next', 16)}</span></button>`).join('')}</div>`
     : `<p class="muted" style="margin:0;font-size:15px">Nessun libro in questo vano. Apri un libro e scegli la posizione, oppure usa «Foto» davanti al vano.</p>`}
     <div class="muted" style="font-size:13px">${list.length === 1 ? '1 libro' : list.length + ' libri'}, nell'ordine dello scaffale</div></div>`;
@@ -961,6 +968,7 @@ $('#shotFile').addEventListener('change', async e => {
 });
 document.addEventListener('visibilitychange', () => { if (document.hidden) camStop(); else if (U.screen === 'scanner') camStart(); });
 
+if (S.colv !== 2) { S.books.forEach(b => { if (!isHex(b.col)) delete b.sp; }); S.colv = 2; save(); }
 render();
 enrich();
 if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('./sw.js').catch(() => {});
