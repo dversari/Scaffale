@@ -525,6 +525,7 @@ function vBook() {
       ${b.syn ? `<details${String(b.syn).length < 420 ? ' open' : ''}><summary style="cursor:pointer;font-family:var(--fh);font-weight:600;font-size:18px">Sinossi</summary><p style="margin:8px 0 4px;font-size:15px;white-space:pre-line">${esc(b.syn)}</p>${b.synSrc ? `<div class="muted" style="font-size:12px">Fonte: ${esc(b.synSrc)}</div>` : ''}</details>` : ''}
     </div>` : (detail && !b.mx ? `<div class="muted" style="font-size:13px">Genere, parole chiave e sinossi in arrivo…</div>` : '')}
     ${dupB ? '' : locBtn('Posizione', loc)}
+    ${detail ? `<button class="btn" data-a="urlSheet" data-v="${b.id}">${ic('search', 18)}${b.syn ? 'Aggiorna la scheda da un sito web' : 'Prendi sinossi e genere da un sito web'}</button>` : ''}
     ${detail ? `<button class="btn" data-a="setCover" data-v="${b.id}">${ic('cam', 18)}${b.cover ? 'Sostituisci la copertina con una foto' : 'Aggiungi la copertina con una foto'}</button>` : ''}
   </div>
   <div class="bar">${detail ? `<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><button class="btn" data-a="edit">${ic('pen', 18)}Modifica</button><button class="btn" data-a="remove">${ic('trash', 18)}Rimuovi</button></div>`
@@ -664,6 +665,38 @@ function vShot() {
   return `<div class="scr">${top}<div class="body" style="display:flex;flex-direction:column;gap:16px;padding-top:6px">${body}</div>${bar ? `<div class="bar">${bar}</div>` : ''}</div>`;
 }
 
+/* ——— scheda da un sito web ——— */
+async function metaFromUrl(b, url) {
+  if (!getKey()) throw new Error('serve la chiave API Claude (impostala da «Foto»)');
+  const r = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers: { 'content-type': 'application/json', 'x-api-key': getKey(), 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' }, body: JSON.stringify({
+    model: 'claude-haiku-5-5', max_tokens: 1500,
+    tools: [{ type: 'web_fetch_20250910', name: 'web_fetch', max_uses: 2, max_content_tokens: 15000 },
+      { name: 'scheda', description: 'Scheda del libro ricavata dalla pagina.', input_schema: { type: 'object', required: ['pertinente'], properties: {
+        pertinente: { type: 'boolean', description: 'false se la pagina non riguarda questo libro o non si è potuta leggere' },
+        sinossi: { type: 'string', description: '3-6 frasi in italiano, riassunto fedele della descrizione nella pagina, senza spoiler' },
+        genere: { type: 'string', description: '1-3 parole in italiano' },
+        parole_chiave: { type: 'array', items: { type: 'string' }, description: '5-8 parole chiave in italiano, minuscole' },
+        editore: { type: 'string' }, anno: { type: 'string' }, pagine: { type: 'string' } } } }],
+    messages: [{ role: 'user', content: `Leggi questa pagina: ${url}\nRicava la scheda del libro «${b.t}»${b.a ? ' di ' + b.a : ''}. Prima usa web_fetch su quell'indirizzo, poi chiama lo strumento scheda con ciò che la pagina dice. Non inventare nulla che non sia nella pagina.` }] }) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(r.status === 401 ? 'chiave API non valida' : (j.error && j.error.message) || 'errore ' + r.status);
+  const fe = (j.content || []).find(c => c.type === 'web_fetch_tool_result' && c.content && /error/.test(c.content.type || ''));
+  const tu = (j.content || []).find(c => c.type === 'tool_use' && c.name === 'scheda');
+  if (!tu || !tu.input || !tu.input.pertinente) {
+    const codes = { url_not_accessible: 'la pagina non risponde', url_not_allowed: 'il sito non permette la lettura automatica', unsupported_content_type: 'tipo di pagina non supportato', too_many_requests: 'troppe richieste, riprova fra poco' };
+    throw new Error(fe ? (codes[fe.content.error_code] || fe.content.error_code) : 'la pagina non sembra riguardare questo libro');
+  }
+  return tu.input;
+}
+function vNoSyn() {
+  const list = S.books.filter(b => !b.syn).sort((x, y) => x.t.localeCompare(y.t, 'it'));
+  return `<div class="scr"><div class="top nav"><button class="btn g" data-a="home" style="font-size:16px">${ic('back')}Archivio</button><span class="k" style="padding-right:8px;color:var(--n7)">Senza sinossi</span></div>
+  <div class="body" style="display:flex;flex-direction:column;gap:14px;padding-top:6px">
+    <div><h2 style="font-size:32px">${list.length ? (list.length === 1 ? '1 libro senza sinossi' : list.length + ' libri senza sinossi') : 'Tutti i libri hanno la sinossi'}</h2>${list.length ? '<p class="muted" style="margin:4px 0 0;font-size:14px">Tocca la lente e incolla l\'indirizzo di una pagina sul libro (sito dell\'editore, una libreria online): Claude ne ricava sinossi, genere e parole chiave.</p>' : ''}</div>
+    <div>${list.map(b => `<div class="row" style="grid-template-columns:minmax(0,1fr) 44px;cursor:default"><button data-a="open" data-v="${b.id}" style="all:unset;cursor:pointer;min-width:0"><div class="t1">${esc(b.t)}</div><div class="t2">${esc(b.a || '—')}${b.mx ? '' : ' · ricerca automatica in corso'}</div></button><button class="btn g ic" data-a="urlSheet" data-v="${b.id}" aria-label="Prendi dati da un sito per ${esc(b.t)}">${ic('search', 22)}</button></div>`).join('')}</div>
+  </div></div>`;
+}
+
 /* ——— libri senza copertina ——— */
 function vNoCover() {
   const list = S.books.filter(b => !b.cover).sort((x, y) => x.t.localeCompare(y.t, 'it'));
@@ -698,7 +731,7 @@ function vDups() {
 
 function render() {
   const s = U.screen;
-  $('#app').innerHTML = s === 'archive' ? vArchive() : s === 'scanner' ? vScanner() : s === 'result' || s === 'detail' ? vBook() : s === 'manual' || s === 'edit' ? vForm() : s === 'batch' ? vBatch() : s === 'shot' ? vShot() : s === 'dups' ? vDups() : s === 'nocover' ? vNoCover() : '';
+  $('#app').innerHTML = s === 'archive' ? vArchive() : s === 'scanner' ? vScanner() : s === 'result' || s === 'detail' ? vBook() : s === 'manual' || s === 'edit' ? vForm() : s === 'batch' ? vBatch() : s === 'shot' ? vShot() : s === 'dups' ? vDups() : s === 'nocover' ? vNoCover() : s === 'nosyn' ? vNoSyn() : '';
 }
 function renderSheet() {
   const el = $('#sheet');
@@ -713,6 +746,15 @@ function renderSheet() {
     <div class="muted" style="font-size:13px">${list.length === 1 ? '1 libro' : list.length + ' libri'}, nell'ordine dello scaffale</div></div>`;
     return;
   }
+  if (U.sheet === 'url') {
+    const b = S.books.find(x => x.id === U.urlFor); if (!b) { el.innerHTML = ''; return; }
+    el.innerHTML = `<div class="bd" data-a="closeSheet"></div><div class="sh"><div style="display:flex;justify-content:space-between;align-items:center"><h3 style="font-size:26px">Dati da un sito web</h3><button class="btn g ic" data-a="closeSheet" aria-label="Chiudi" style="color:var(--text)">${ic('x')}</button></div>
+    <p class="muted" style="margin:0;font-size:14px">Incolla l'indirizzo di una pagina su «${esc(b.t)}»: il sito dell'editore, una libreria online, Wikipedia. Claude la legge e aggiorna sinossi, genere e parole chiave; completa anche editore, anno e pagine se mancano.</p>
+    <form data-f="url" style="display:flex;flex-direction:column;gap:10px"><div class="field"><label for="urlIn">Indirizzo della pagina</label><input id="urlIn" class="in" name="url" type="url" inputmode="url" autocomplete="off" placeholder="https://…" required></div><button class="btn p bp">${M}Leggi la pagina</button></form>
+    <p class="muted" style="margin:0;font-size:12px">Alcuni siti (per esempio Amazon) bloccano la lettura automatica o caricano i testi solo con JavaScript: in quel caso prova un'altra pagina.</p></div>`;
+    const i = el.querySelector('#urlIn'); if (i) i.focus();
+    return;
+  }
   if (U.sheet === 'gkey') {
     el.innerHTML = `<div class="bd" data-a="closeSheet"></div><div class="sh"><div style="display:flex;justify-content:space-between;align-items:center"><h3 style="font-size:26px">Chiave Google Books</h3><button class="btn g ic" data-a="closeSheet" aria-label="Chiudi" style="color:var(--text)">${ic('x')}</button></div>
     <p class="muted" style="margin:0;font-size:14px">Senza chiave Google limita molto le ricerche. Con una chiave gratuita hai 1000 ricerche al giorno. Resta solo su questo dispositivo.</p>
@@ -725,6 +767,7 @@ function renderSheet() {
     <div style="border-top:1px solid var(--div)">
       <div class="menu" style="cursor:default">${ic('check')}<span style="flex:1">Schede con sinossi e genere</span><span class="muted" style="font-size:13px">${S.books.filter(b => b.mx).length}/${S.books.length}${metaRun ? ' · in corso' : Date.now() < gbPause ? ' · in pausa fino alle ' + new Date(gbPause).toTimeString().slice(0, 5) : ''}</span></div>
       ${S.books.some(b => b.mx && !b.syn) ? `<button class="menu" data-a="metaRetry">${ic('search')}<span style="flex:1">Riprova i libri senza sinossi</span><span class="muted" style="font-size:13px">${S.books.filter(b => b.mx && !b.syn).length}</span></button>` : ''}
+      <button class="menu" data-a="nosyn">${ic('search')}<span style="flex:1">Libri senza sinossi</span><span class="muted" style="font-size:13px">${S.books.filter(b => !b.syn).length}</span></button>
       <button class="menu" data-a="nocover">${ic('cam')}<span style="flex:1">Libri senza copertina</span><span class="muted" style="font-size:13px">${S.books.filter(b => !b.cover).length}</span></button>
       <button class="menu" data-a="dups">${ic('search')}<span style="flex:1">Cerca duplicati</span><span class="muted" style="font-size:13px">${(n => n ? (n === 1 ? '1 gruppo' : n + ' gruppi') : 'nessuno')(dupGroups().length)}</span></button>
       <button class="menu" data-a="csv">${ic('down')}<span style="flex:1">Esporta in CSV</span><span class="muted" style="font-size:13px">per Excel o Numbers</span></button>
@@ -816,6 +859,8 @@ const A = {
   },
   metaRetry: () => { S.books.forEach(b => { if (b.mx && !b.syn) delete b.mx; }); save(); enrichMeta(); renderSheet(); toast('Riprovo a cercare le schede mancanti'); },
   nocover: () => go('nocover'),
+  nosyn: () => go('nosyn'),
+  urlSheet: v => { U.urlFor = v; U.sheet = 'url'; renderSheet(); },
   setCover: v => { U.coverFor = v; $('#setCoverFile').click(); },
   dups: () => { U.dupSel = new Set(); go('dups'); },
   dupToggle: v => { const s = U.dupSel; s.has(v) ? s.delete(v) : s.add(v); render(); },
@@ -851,6 +896,20 @@ document.addEventListener('submit', e => {
   e.preventDefault();
   const f = e.target.dataset.f;
   if (f === 'isbn') { const d = norm(e.target.isbn.value); if (!isIsbn(d)) return flash('ISBN non valido', 'Servono 10 o 13 cifre'); if (U.mode === 'link') { e.target.isbn.value = ''; return linkCode(d); } camStop(); openIsbn(d); }
+  if (f === 'url') {
+    const url = e.target.url.value.trim(), b = S.books.find(x => x.id === U.urlFor);
+    if (!/^https?:\/\//i.test(url) || !b) return;
+    U.sheet = null; renderSheet(); toast('Leggo la pagina… qualche secondo');
+    metaFromUrl(b, url).then(o => {
+      const host = (() => { try { return new URL(url).hostname.replace(/^www\./, ''); } catch (err) { return url; } })();
+      if (o.sinossi) { b.syn = o.sinossi; b.synSrc = host + ', riassunta da Claude'; b.synUrl = url; }
+      if (o.genere) b.gen = o.genere;
+      if (Array.isArray(o.parole_chiave) && o.parole_chiave.length) b.kw = o.parole_chiave.slice(0, 10);
+      if (!b.p && o.editore) b.p = o.editore; if (!b.y && o.anno) b.y = String(o.anno).slice(0, 4); if (!b.pg && o.pagine) b.pg = String(o.pagine).replace(/\D/g, '');
+      b.mx = 1; save(); render(); toast(o.sinossi ? 'Scheda aggiornata da ' + host : 'Nessuna sinossi nella pagina di ' + host);
+    }).catch(err => toast('Non riuscito: ' + (err.message || err)));
+    return;
+  }
   if (f === 'gkey') { const k = e.target.gkey.value.trim(); try { k ? localStorage.setItem(GKEY, k) : localStorage.removeItem(GKEY); } catch (err) {} gbPause = 0; U.sheet = null; renderSheet(); toast(k ? 'Chiave Google salvata' : 'Chiave Google rimossa'); enrich(); return; }
   if (f === 'key') { const k = e.target.key.value.trim(); if (k) { try { localStorage.setItem(KKEY, k); } catch (err) {} render(); } return; }
   if (f === 'room') { const r = e.target.room.value.trim(); if (r && !S.rooms.includes(r)) { S.rooms.push(r); save(); } if (r) U.draft.room = r; U.newRoom = false; renderSheet(); }
